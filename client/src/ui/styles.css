@@ -1184,6 +1184,22 @@
   }
 }
 
+/* Cartão mínimo (celular com 3 contas e os dois contadores na mesma linha): sem a barra, ficam rótulo e percentual. */
+@container usage-card (max-width: 60px) {
+  .ui-usage-card__meters {
+    grid-template-columns: auto auto;
+    column-gap: 4px;
+  }
+
+  .ui-meter__bar {
+    display: none;
+  }
+
+  .ui-meter__pct {
+    font-size: 11px;
+  }
+}
+
 .ui-usage-card__msg {
   display: flex;
   align-items: center;
@@ -4248,6 +4264,12 @@
   .ui-usage {
     order: 10;
     flex: 1 1 60%;
+  }
+
+  /* Com 3 contas cada pixel conta: o corpo do cartão ganha o que sobrava no vão e na borda direita. */
+  .ui-usage-card {
+    gap: 4px;
+    padding-right: 5px;
   }
 }
 
