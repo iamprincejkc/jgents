@@ -76,6 +76,8 @@ describe('demo-timeline', () => {
     expect(() => generateDemoTimeline(opts)).toThrow(/já existe/);
     const again = generateDemoTimeline({ ...opts, force: true });
     expect(readFileSync(again.files[0], 'utf8')).toBe(readFileSync(file, 'utf8'));
-    // Duas gravações de 3 h simuladas, uma linha por vez: no Windows passa dos 5 s padrão.
-  }, 30_000);
+    // Duas gravações de 3 h simuladas, uma linha por vez (appendFileSync). No Windows (2026-10-16, 12 núcleos): 4 s
+    // sozinho, 19 s na suíte inteira (os outros arquivos rodam ao mesmo tempo) e 32 s com o computador ocupado, o que
+    // estourava os 30 s de antes. O prazo só protege contra travar.
+  }, 90_000);
 });
