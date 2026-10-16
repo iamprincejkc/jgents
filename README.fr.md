@@ -1163,7 +1163,7 @@ quand la commande se termine — ou quand vous envoyez une nouvelle demande à q
 on m'appelle ! 🏃 ») et retourne en courant à son bureau.
 
 <p align="center">
-  <img src="docs/screenshots/social-lounge.gif" width="816" alt="Le salon de JGENTS avec trois groupes en même temps : trois collègues sur le canapé regardent le foot à la télé (l'écran fait clignoter GOL), une partie de ping-pong avec des supporters et un duel sur les bornes d'arcade avec des provocations dans les bulles" />
+  <img src="docs/screenshots/social-lounge.gif" width="816" alt="Le salon de JGENTS avec trois groupes en même temps : trois collègues sur le canapé regardent le foot à la télé (l'écran fait clignoter BUT), une partie de ping-pong et un duel sur les bornes d'arcade avec des provocations dans les bulles" />
 </p>
 
 ### Les activités de groupe
@@ -1181,8 +1181,8 @@ on m'appelle ! 🏃 ») et retourne en courant à son bureau.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/social-rps.png" alt="Chifoumi à l'accueil : Lia fête ça avec une pièce au-dessus de la tête et la bulle « Gagné ! », des pièces volent de Bruna (dépitée, avec l'icône de la pierre) vers elle, « +20 » et « −20 » flottent, et Iara regarde derrière" /></td>
-    <td width="50%"><img src="docs/screenshots/social-kitchen.png" alt="Pause à la cuisine : quatre collègues assis à la longue table avec du café, avec les bulles « Ça va marcher ! » et « Hahaha »" /></td>
+    <td width="50%"><img src="docs/screenshots/social-rps.png" alt="Chifoumi à la cuisine : Lia fête ça avec une pièce au-dessus de la tête et la bulle « Gagné ! », des pièces volent de Bruna (avec l'icône de la pierre) vers elle, et « +10 » et « −10 » flottent au-dessus d'elles" /></td>
+    <td width="50%"><img src="docs/screenshots/social-kitchen.png" alt="Pause à la cuisine : quatre collègues assis à la longue table avec du café, avec les bulles « C'est vendredi ! » et « Hahaha »" /></td>
   </tr>
   <tr>
     <td><b>Chifoumi avec des pièces en jeu.</b> La mise dépend de la personnalité (les amateurs de paris misent gros, les radins misent peu) et ne dépasse jamais le solde de celui qui en a le moins.</td>
@@ -1190,7 +1190,7 @@ on m'appelle ! 🏃 ») et retourne en courant à son bureau.
   </tr>
   <tr>
     <td><img src="docs/screenshots/social-mirror.png" alt="Deux collègues devant les lavabos des toilettes en train de se préparer, avec leurs visages reflétés dans les miroirs et la bulle « Tu assures ! »" /></td>
-    <td><img src="docs/screenshots/social-drawer.png" alt="Section Vie sociale dans les détails de l'agent : « Regarde une série à la télé avec Bruna et Iara », 115 pièces, 1 victoire et 0 défaite, les traits Coquetterie et Économie, la réplique culte, les amitiés, les rivalités avec le score et le relevé" /></td>
+    <td><img src="docs/screenshots/social-drawer.png" alt="Section Vie sociale dans les détails de l'agent : « Regarde une série à la télé avec Heitor », 125 pièces, 2 victoires et 0 défaite, les traits Jeux vidéo et Blagues, la réplique culte, les amitiés, les rivalités et le relevé" /></td>
   </tr>
   <tr>
     <td><b>Au miroir.</b> Les coquets passent aux toilettes dès qu'ils le peuvent — et apparaissent dans le reflet.</td>

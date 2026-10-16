@@ -1115,7 +1115,7 @@ for a hangout (alone, it sticks with the popcorn) and takes the hourglass along;
 a new request to someone — it lets the group know ("Oops, they're calling me! 🏃") and runs back to its desk.
 
 <p align="center">
-  <img src="docs/screenshots/social-lounge.gif" width="816" alt="JGENTS lounge with three hangouts at once: three coworkers on the couch watching soccer on TV (the screen flashes GOL), a ping-pong match with fans and an arcade duel with trash talk in the bubbles" />
+  <img src="docs/screenshots/social-lounge.gif" width="816" alt="JGENTS lounge with three hangouts at once: three coworkers on the couch watching soccer on TV (the screen flashes GOAL), a ping-pong match and an arcade duel with trash talk in the bubbles" />
 </p>
 
 ### The hangouts
@@ -1133,8 +1133,8 @@ a new request to someone — it lets the group know ("Oops, they're calling me! 
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/social-rps.png" alt="Rock-paper-scissors in the lobby: Lia celebrates with a coin over her head and the bubble 'I won!', coins fly from Bruna (upset, with the rock icon) to her, '+20' and '−20' floating, and Iara watches from behind" /></td>
-    <td width="50%"><img src="docs/screenshots/social-kitchen.png" alt="Kitchen chat: four coworkers sitting at the long table with coffee, with the bubbles 'It'll work out!' and 'Hahaha'" /></td>
+    <td width="50%"><img src="docs/screenshots/social-rps.png" alt="Rock-paper-scissors in the kitchen: Lia celebrates with a coin over her head and the bubble 'I won!', coins fly from Bruna (with the rock icon) to her, and '+10' and '−10' float above them" /></td>
+    <td width="50%"><img src="docs/screenshots/social-kitchen.png" alt="Kitchen chat: four coworkers sitting at the long table with coffee, with the bubbles 'TGIF!' and 'Hahaha'" /></td>
   </tr>
   <tr>
     <td><b>Rock-paper-scissors for coins.</b> The bet comes from the personality (betting lovers bet big, penny-pinchers bet little) and never goes over the balance of whoever has less.</td>
@@ -1142,7 +1142,7 @@ a new request to someone — it lets the group know ("Oops, they're calling me! 
   </tr>
   <tr>
     <td><img src="docs/screenshots/social-mirror.png" alt="Two coworkers at the bathroom sinks freshening up, with their faces reflected in the mirrors and the bubble 'You're killing it!'" /></td>
-    <td><img src="docs/screenshots/social-drawer.png" alt="Social life section in the agent's details: 'Watching a soap opera on TV with Bruna and Iara', 115 coins, 1 win and 0 losses, the Vanity and Thrift traits, the catchphrase, friendships, rivalries with the score and the statement" /></td>
+    <td><img src="docs/screenshots/social-drawer.png" alt="Social life section in the agent's details: 'Watching a soap opera on TV with Heitor', 125 coins, 2 wins and 0 losses, the Games and Jokes traits, the catchphrase, friendships, rivalries and the statement" /></td>
   </tr>
   <tr>
     <td><b>At the mirror.</b> Vanity lovers stop by the restroom whenever they can — and show up reflected.</td>

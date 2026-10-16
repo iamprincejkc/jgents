@@ -1155,7 +1155,7 @@ termina (o cuando le envías una solicitud nueva a alguien), avisa al grupo ("¡
 a su escritorio.
 
 <p align="center">
-  <img src="docs/screenshots/social-lounge.gif" width="816" alt="Salón de JGENTS con tres rondas al mismo tiempo: tres compañeros en el sofá viendo fútbol en la TV (la pantalla parpadea GOL), un partido de ping-pong con público animando y un duelo en las máquinas arcade con provocaciones en los globos" />
+  <img src="docs/screenshots/social-lounge.gif" width="816" alt="Salón de JGENTS con tres rondas al mismo tiempo: tres compañeros en el sofá viendo fútbol en la TV (la pantalla parpadea GOL), un partido de ping-pong y un duelo en las máquinas arcade con provocaciones en los globos" />
 </p>
 
 ### Las rondas
@@ -1173,8 +1173,8 @@ a su escritorio.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/social-rps.png" alt="Piedra, papel o tijera en la recepción: Lia celebra con una moneda sobre la cabeza y el globo '¡Gané!', las monedas vuelan de Bruna (enojada, con el ícono de piedra) hacia ella, '+20' y '−20' flotando, e Iara mira detrás" /></td>
-    <td width="50%"><img src="docs/screenshots/social-kitchen.png" alt="Charla en la cocina: cuatro compañeros sentados a la mesa larga con café, con los globos '¡Va a salir bien!' y 'Jajaja'" /></td>
+    <td width="50%"><img src="docs/screenshots/social-rps.png" alt="Piedra, papel o tijera en la cocina: Lia celebra con una moneda sobre la cabeza y el globo '¡Gané!', las monedas vuelan de Bruna (con el ícono de piedra) hacia ella, y '+10' y '−10' flotan sobre ellas" /></td>
+    <td width="50%"><img src="docs/screenshots/social-kitchen.png" alt="Charla en la cocina: cuatro compañeros sentados a la mesa larga con café, con los globos '¡Por fin es viernes!' y 'Jajaja'" /></td>
   </tr>
   <tr>
     <td><b>Piedra, papel o tijera por monedas.</b> La apuesta sale de la personalidad (quien es de apuestas apuesta fuerte, quien es tacaño apuesta poco) y nunca supera el saldo de quien tiene menos.</td>
@@ -1182,7 +1182,7 @@ a su escritorio.
   </tr>
   <tr>
     <td><img src="docs/screenshots/social-mirror.png" alt="Dos compañeras frente a los lavabos del baño arreglándose, con las caras reflejadas en los espejos y el globo '¡Estás arrasando!'" /></td>
-    <td><img src="docs/screenshots/social-drawer.png" alt="Sección Vida social en los detalles del agente: 'Viendo una telenovela en la tele con Bruna e Iara', 115 monedas, 1 victoria y 0 derrotas, los rasgos Vanidad y Ahorro, la muletilla, amistades, rivalidades con el marcador y los movimientos" /></td>
+    <td><img src="docs/screenshots/social-drawer.png" alt="Sección Vida social en los detalles del agente: 'Viendo una telenovela en la tele con Heitor', 125 monedas, 2 victorias y 0 derrotas, los rasgos Videojuegos y Chistes, la muletilla, amistades, rivalidades y los movimientos" /></td>
   </tr>
   <tr>
     <td><b>En el espejo.</b> Quien es de vanidad pasa por el baño siempre que puede, y aparece reflejado.</td>

@@ -1107,7 +1107,7 @@ para uma roda (sozinho, continua na pipoca) e leva a ampulheta junto; quando o c
 um pedido novo para alguém —, ele avisa a turma ("Opa, me chamaram! 🏃") e corre de volta para a mesa.
 
 <p align="center">
-  <img src="docs/screenshots/social-lounge.gif" width="816" alt="Lounge do JGENTS com três rodas ao mesmo tempo: três colegas no sofá vendo futebol na TV (a tela pisca GOL), uma partida de pingue-pongue com torcida e um duelo nos fliperamas com provocações nos balões" />
+  <img src="docs/screenshots/social-lounge.gif" width="816" alt="Lounge do JGENTS com três rodas ao mesmo tempo: três colegas no sofá vendo futebol na TV (a tela pisca GOL), uma partida de pingue-pongue e um duelo nos fliperamas com provocações nos balões" />
 </p>
 
 ### As rodas
@@ -1125,8 +1125,8 @@ um pedido novo para alguém —, ele avisa a turma ("Opa, me chamaram! 🏃") e 
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/social-rps.png" alt="Jokenpô na recepção: Lia comemora com uma moeda sobre a cabeça e o balão 'Ganhei!', moedinhas voam de Bruna (chateada, com o ícone de pedra) para ela, '+20' e '−20' flutuando, e Iara assiste atrás" /></td>
-    <td width="50%"><img src="docs/screenshots/social-kitchen.png" alt="Papo na copa: quatro colegas sentados à mesa comprida com café, com os balões 'Vai dar certo!' e 'Hahaha'" /></td>
+    <td width="50%"><img src="docs/screenshots/social-rps.png" alt="Jokenpô na copa: Lia comemora com uma moeda sobre a cabeça e o balão 'Ganhei!', moedinhas voam de Bruna (com o ícone de pedra) para ela, e '+10' e '−10' flutuam acima delas" /></td>
+    <td width="50%"><img src="docs/screenshots/social-kitchen.png" alt="Papo na copa: quatro colegas sentados à mesa comprida com café, com os balões 'Sextou!' e 'Hahaha'" /></td>
   </tr>
   <tr>
     <td><b>Jokenpô valendo moedinhas.</b> A aposta sai da personalidade (quem é de apostas aposta alto, quem é pão-duro aposta pouco) e nunca passa do saldo de quem tem menos.</td>
@@ -1134,7 +1134,7 @@ um pedido novo para alguém —, ele avisa a turma ("Opa, me chamaram! 🏃") e 
   </tr>
   <tr>
     <td><img src="docs/screenshots/social-mirror.png" alt="Duas colegas diante das pias do banheiro se arrumando, com os rostos refletidos nos espelhos e o balão 'Tá arrasando!'" /></td>
-    <td><img src="docs/screenshots/social-drawer.png" alt="Seção Vida social nos detalhes do agente: 'Vendo novela na TV com Bruna e Iara', 115 moedinhas, 1 vitória e 0 derrotas, os traços Vaidade e Economia, o bordão, amizades, rivalidades com o placar e o extrato" /></td>
+    <td><img src="docs/screenshots/social-drawer.png" alt="Seção Vida social nos detalhes do agente: 'Vendo novela na TV com Heitor', 125 moedinhas, 2 vitórias e 0 derrotas, os traços Games e Piadas, o bordão, amizades, rivalidades e o extrato" /></td>
   </tr>
   <tr>
     <td><b>No espelho.</b> Quem é de vaidade passa no banheiro sempre que pode — e aparece refletido.</td>
