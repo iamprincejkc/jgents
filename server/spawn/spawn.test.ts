@@ -1,6 +1,6 @@
 import { chmodSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   cliArgs,
@@ -17,6 +17,23 @@ import {
   type Opener,
 } from './spawn';
 import { runnableClaudeBin } from '../claude-bin';
+
+/**
+ * O claude falso roda aqui? Ele é um script de shell, e no Windows o execFile (sem shell) só roda .exe: lá o teste que
+ * o executa fica de fora (a busca no PATH segue testada, com um claude.exe).
+ */
+const FAKE_CLAUDE_RUNS = process.platform !== 'win32';
+
+/** Grava o claude falso em <dir> (no Windows, claude.exe: o nome que a busca procura) e devolve o caminho. */
+function writeFakeClaude(dir: string): string {
+  const bin = join(dir, process.platform === 'win32' ? 'claude.exe' : 'claude');
+  writeFileSync(
+    bin,
+    `#!/bin/sh\nprintf '%s\\n' "$PWD" "$@" > "${dir}/args"\n[ -f ./trusted ] || { echo 'Workspace not trusted. Run claude once' >&2; exit 1; }\necho 'Starting background service…'\necho 'backgrounded · 7eacc670 · nome'\n`,
+  );
+  chmodSync(bin, 0o755);
+  return bin;
+}
 
 describe('novo agente: pedido e link', () => {
   it('aceita só pasta absoluta e pedido do tamanho certo', () => {
@@ -162,17 +179,17 @@ describe('novo agente em segundo plano (claude --bg)', () => {
     expect(cliArgs({ folder: '/p', prompt: '  ' })).toEqual(['--bg', '-n', 'JGENTS']);
   });
 
-  it('createCliRunner roda o binário na pasta, sem shell, e lê o id; erro vira a 1ª linha', async () => {
+  it('runnableClaudeBin acha o claude no PATH (no Windows, o claude.exe) e recusa um JGENTS_CLAUDE_BIN que não existe', () => {
     const dir = mkdtempSync(join(tmpdir(), 'hb-spawn-'));
-    const bin = join(dir, 'claude');
-    writeFileSync(
-      bin,
-      `#!/bin/sh\nprintf '%s\\n' "$PWD" "$@" > "${dir}/args"\n[ -f ./trusted ] || { echo 'Workspace not trusted. Run claude once' >&2; exit 1; }\necho 'Starting background service…'\necho 'backgrounded · 7eacc670 · nome'\n`,
-    );
-    chmodSync(bin, 0o755);
-    writeFileSync(join(dir, 'trusted'), '');
-    expect(runnableClaudeBin({ PATH: `/nao/existe:${dir}` })).toBe(bin);
+    const bin = writeFakeClaude(dir);
+    expect(runnableClaudeBin({ PATH: ['/nao/existe', dir].join(delimiter) })).toBe(bin);
     expect(runnableClaudeBin({ JGENTS_CLAUDE_BIN: join(dir, 'nada'), PATH: dir })).toBeUndefined();
+  });
+
+  it.runIf(FAKE_CLAUDE_RUNS)('createCliRunner roda o binário na pasta, sem shell, e lê o id; erro vira a 1ª linha', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hb-spawn-'));
+    const bin = writeFakeClaude(dir);
+    writeFileSync(join(dir, 'trusted'), '');
     const run = createCliRunner(bin);
     expect(await run({ folder: dir, prompt: 'faça $(rm -rf x) && y' })).toEqual({ ok: true, id: '7eacc670' });
     const args = readFileSync(join(dir, 'args'), 'utf8').trim().split('\n');
