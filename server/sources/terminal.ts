@@ -175,11 +175,26 @@ interface ToolView {
   inputKind?: TerminalInputKind;
 }
 
-function relPath(p: string, cwd: string | undefined): string {
-  if (!cwd || !p.startsWith('/')) return p;
-  const base = cwd.replace(/\/+$/, '');
-  if (!base || p === base) return base ? '.' : p;
-  return p.startsWith(`${base}/`) ? p.slice(base.length + 1) : p;
+/** Caminho absoluto do Windows, com letra de unidade (C:\... ou C:/...). */
+const WINDOWS_ABSOLUTE = /^[A-Za-z]:[\\/]/;
+
+/**
+ * `p` relativo à pasta `cwd` ("src/a.ts"; "." para a própria pasta); fora dela, ou sem `cwd`, `p` como veio. Cada caminho
+ * é lido pelo seu formato, como em deliveries/files.ts (pathFlavor), e não pelo sistema do servidor: /... é POSIX;
+ * C:\... ou C:/... é Windows, onde as duas barras separam e maiúsculas e minúsculas são a mesma letra. A raiz (/ ou C:\)
+ * nunca encurta nada. Também usado pelos pedidos do Codex (permissions/codex.ts).
+ */
+export function relPath(p: string, cwd: string | undefined): string {
+  if (!cwd) return p;
+  const win = WINDOWS_ABSOLUTE.test(p);
+  if (!win && !p.startsWith('/')) return p;
+  const base = cwd.replace(win ? /[\\/]+$/ : /\/+$/, '');
+  if (!base || (win && /^[A-Za-z]:$/.test(base))) return p;
+  const fold = (s: string) => (win ? s.replace(/\//g, '\\').toLowerCase() : s);
+  if (fold(p.slice(0, base.length)) !== fold(base)) return p;
+  const rest = p.slice(base.length);
+  if (!rest) return '.';
+  return rest[0] === '/' || (win && rest[0] === '\\') ? rest.slice(1) : p;
 }
 
 function titled(label: string, arg: string | undefined): string {

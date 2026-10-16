@@ -165,6 +165,13 @@ describe('codexToolView: nomes de ferramenta do Codex', () => {
     expect(codexToolView('apply_patch', { command: '*** Begin Patch\n*** Delete File: velho.md\n*** End Patch' })).toMatchObject({ text: 'Apagando velho.md', icon: '🗑️' });
   });
 
+  it('apply_patch do Windows: caminhos C:\\... relativos ao cwd (em qualquer sistema)', () => {
+    const patch = ['*** Begin Patch', '*** Update File: D:\\obra\\loja\\src\\app.ts', '-a', '+b', '*** Add File: d:/obra/loja/novo.ts', '+x', '*** End Patch'].join('\n');
+    expect(codexToolView('apply_patch', { command: patch }, 'D:\\obra\\loja')).toMatchObject({ title: 'apply_patch(src\\app.ts +1)', text: 'Editando 2 arquivos' });
+    const one = '*** Begin Patch\n*** Update File: C:\\outro\\app.ts\n-a\n+b\n*** End Patch';
+    expect(codexToolView('apply_patch', { command: one }, 'D:\\obra\\loja')).toMatchObject({ title: 'apply_patch(C:\\outro\\app.ts)', text: 'Editando app.ts' });
+  });
+
   it('request_permissions, mcp__ e write_stdin (session_id ali é de processo; o texto só no detalhe, mascarado)', () => {
     expect(codexToolView('request_permissions', { reason: 'Preciso gravar fora do projeto', permissions: { fileSystem: { write: ['/tmp/x'] } } })).toMatchObject({
       title: 'request_permissions(Preciso gravar fora do projeto)',

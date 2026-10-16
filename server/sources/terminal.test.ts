@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TerminalEntry } from '../../shared/types';
 import { L } from '../test/fixtures';
-import { createTerminalParser, DETAIL_MAX, INPUT_MAX, RESULT_MAX, RESULT_MAX_LINES, TEXT_MAX, THINKING_MAX } from './terminal';
+import { createTerminalParser, DETAIL_MAX, INPUT_MAX, relPath, RESULT_MAX, RESULT_MAX_LINES, TEXT_MAX, THINKING_MAX } from './terminal';
 
 const T0 = Date.parse('2026-10-06T10:00:00Z');
 // Token falso montado em partes (nada de segredo literal no repositório).
@@ -257,6 +257,54 @@ describe('terminal — respostas e ferramentas', () => {
     expect(view('t14')).toEqual({ title: 'FerramentaNova(servidor)', input: '{\n  "vezes": 2\n}', kind: 'json' });
     expect(view('t15')).toEqual({ title: 'srv - ping (MCP)', input: undefined, kind: undefined });
     expect(view('t16')).toEqual({ title: 'MultiEdit(b.ts)', input: '- x\n+ y\n@@\n- p\n+ q', kind: 'diff' });
+  });
+
+  it('transcript do Windows: caminhos relativos ao cwd C:\\... (em qualquer sistema)', () => {
+    const tools = [
+      L.tool('w1', 'Read', { file_path: 'D:\\UNDER CONSTRUCTION\\Personal\\loja\\src\\Cart.tsx' }),
+      L.tool('w2', 'Edit', { file_path: 'D:/UNDER CONSTRUCTION/Personal/loja/src/a.ts', old_string: 'a', new_string: 'b' }),
+      L.tool('w3', 'Write', { file_path: 'd:\\under construction\\personal\\loja\\README.md', content: 'oi' }),
+      L.tool('w4', 'Grep', { pattern: 'useCart', path: 'D:\\UNDER CONSTRUCTION\\Personal\\loja\\src' }),
+      L.tool('w5', 'Read', { file_path: 'D:\\UNDER CONSTRUCTION\\Personal\\loja-velha\\x.ts' }),
+      L.tool('w6', 'Read', { file_path: 'C:\\Users\\ana\\notas.md' }),
+    ];
+    const line = JSON.stringify({ ...JSON.parse(L.assistant(tools, { msgId: 'mw' })), cwd: 'D:\\UNDER CONSTRUCTION\\Personal\\loja' });
+    const e = only(run([line]), 'tool');
+    expect(e.map((x) => x.title)).toEqual([
+      'Read(src\\Cart.tsx)',
+      'Edit(src/a.ts)',
+      'Write(README.md)',
+      'Grep(useCart)',
+      'Read(D:\\UNDER CONSTRUCTION\\Personal\\loja-velha\\x.ts)',
+      'Read(C:\\Users\\ana\\notas.md)',
+    ]);
+    expect(e[3].input).toBe('{\n  "path": "src"\n}');
+  });
+
+  it('relPath: cada caminho pelo seu formato; no Windows as duas barras e qualquer caixa', () => {
+    const cwd = 'D:\\obra\\loja';
+    expect(relPath('D:\\obra\\loja\\src\\a.ts', cwd)).toBe('src\\a.ts');
+    expect(relPath('D:/obra/loja/src/a.ts', cwd)).toBe('src/a.ts');
+    expect(relPath('d:\\OBRA\\Loja\\a.ts', cwd)).toBe('a.ts');
+    expect(relPath('D:\\obra\\loja\\a.ts', 'd:/obra/loja/')).toBe('a.ts');
+    expect(relPath('D:\\obra\\loja', cwd)).toBe('.');
+    expect(relPath('D:/obra/loja', `${cwd}\\`)).toBe('.');
+    // Fora: pasta irmã com o mesmo começo, outra unidade, relativo, cwd de outro formato, raiz da unidade, sem cwd.
+    expect(relPath('D:\\obra\\loja-velha\\a.ts', cwd)).toBe('D:\\obra\\loja-velha\\a.ts');
+    expect(relPath('C:\\obra\\loja\\a.ts', cwd)).toBe('C:\\obra\\loja\\a.ts');
+    expect(relPath('src\\a.ts', cwd)).toBe('src\\a.ts');
+    expect(relPath('D:\\obra\\loja\\a.ts', '/obra/loja')).toBe('D:\\obra\\loja\\a.ts');
+    expect(relPath('C:\\Users\\a.ts', 'C:\\')).toBe('C:\\Users\\a.ts');
+    expect(relPath('C:\\Users\\a.ts', 'c:')).toBe('C:\\Users\\a.ts');
+    expect(relPath('D:\\obra\\loja\\a.ts', undefined)).toBe('D:\\obra\\loja\\a.ts');
+    // POSIX como sempre: só "/" separa e a caixa conta.
+    expect(relPath('/obra/loja/src/a.ts', '/obra/loja/')).toBe('src/a.ts');
+    expect(relPath('/obra/loja', '/obra/loja')).toBe('.');
+    expect(relPath('/obra/loja-velha/a.ts', '/obra/loja')).toBe('/obra/loja-velha/a.ts');
+    expect(relPath('/Obra/loja/a.ts', '/obra/loja')).toBe('/Obra/loja/a.ts');
+    expect(relPath('/obra/loja\\a.ts', '/obra/loja')).toBe('/obra/loja\\a.ts');
+    expect(relPath('/obra/a.ts', '/')).toBe('/obra/a.ts');
+    expect(relPath('/obra/loja/a.ts', 'D:\\obra\\loja')).toBe('/obra/loja/a.ts');
   });
 
   it('resultados: texto, blocos, imagem, erro, recusa e id próprio', () => {

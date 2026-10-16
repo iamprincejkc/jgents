@@ -10,7 +10,7 @@
 // Tudo mascarado (maskSecrets) e cortado como no terminal.
 import { basename, describeTool, maskSecrets, truncate } from '../../shared/activity';
 import type { TerminalInputKind } from '../../shared/types';
-import { TITLE_ARG_MAX, toolView } from '../sources/terminal';
+import { relPath, TITLE_ARG_MAX, toolView } from '../sources/terminal';
 import { tr } from '../../shared/i18n';
 
 /** Resumo de um pedido do Codex: o que vai em PermissionRequestInfo (title, text, icon, input, inputKind). */
@@ -43,12 +43,6 @@ function line(s: string, max: number): string {
 function shown(raw: string | undefined, inputKind: TerminalInputKind): Pick<CodexToolView, 'input' | 'inputKind'> {
   const input = raw?.trim() ? toolView('Bash', { command: raw }).input : undefined;
   return input ? { input, inputKind } : {};
-}
-
-function relPath(p: string, cwd: string | undefined): string {
-  if (!cwd || !p.startsWith('/')) return p;
-  const base = cwd.replace(/\/+$/, '');
-  return base && p.startsWith(`${base}/`) ? p.slice(base.length + 1) : p;
 }
 
 /** Arquivos de um patch do apply_patch, na ordem. */
