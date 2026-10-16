@@ -7,12 +7,11 @@
 // Cada transcript é relido só quando muda (mtime/tamanho). Os anexos ganham ids opacos: o navegador nunca vê caminhos.
 import { createHash } from 'node:crypto';
 import { statSync } from 'node:fs';
-import { isAbsolute, join, normalize } from 'node:path';
 import { tr } from '../../shared/i18n';
 import type { DeliveryAttachment, DeliveryInfo, Provider, RecentSession, TerminalEntry } from '../../shared/types';
 import type { TerminalParser } from '../sources/terminal';
 import { FileTail } from '../sources/tail';
-import { fileType, pathProblem } from './files';
+import { fileType, pathFlavor, pathProblem } from './files';
 
 /** Quanto do fim de cada transcript entra (os pedidos mais antigos de uma sessão longa ficam de fora). */
 export const TAIL_BYTES = 6 * 1024 * 1024;
@@ -26,9 +25,9 @@ const SUMMARY_MAX = 600;
 const REQUEST_MAX = 240;
 const MIN_TEXT = 30;
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'apply_patch']);
-/** Caminhos de arquivo de ver citados na resposta: em links markdown ou soltos. */
+/** Caminhos de arquivo de ver citados na resposta: em links markdown ou soltos (/... ou, do Windows, C:\...). */
 const LINK_RE = /\]\(\s*<?([^)\s>]+?\.(?:png|jpe?g|gif|webp|svg|pdf|mp4|mov|webm|html?))(?::\d+)?>?\s*\)/gi;
-const BARE_RE = /(?:^|[\s(`"'])(\/[^\s`"'()<>]+?\.(?:png|jpe?g|gif|webp|svg|pdf|mp4|mov|webm|html?))(?=$|[\s`"'),.;:!?])/gim;
+const BARE_RE = /(?:^|[\s(`"'])((?:\/|[A-Za-z]:[\\/])[^\s`"'()<>]+?\.(?:png|jpe?g|gif|webp|svg|pdf|mp4|mov|webm|html?))(?=$|[\s`"'),.;:!?])/gim;
 
 export interface SessionSource {
   path: string;
@@ -131,12 +130,16 @@ export function linkedFiles(text: string, project?: string): string[] {
       // fica como veio
     }
     if (p.startsWith('file://')) p = p.slice(7);
-    if (/^[a-z]+:/i.test(p)) return;
-    if (!isAbsolute(p)) {
-      if (!project) return;
-      p = join(project, p);
-    }
-    p = normalize(p);
+    // file:///C:/x.png
+    if (/^\/[A-Za-z]:\//.test(p)) p = p.slice(1);
+    // Outros endereços (https:, data:...); uma letra só antes do ":" é a unidade do Windows (C:\...).
+    if (/^[a-z][a-z0-9+.-]+:/i.test(p)) return;
+    // \\servidor e //servidor são caminhos de rede no Windows, e \x depende da unidade: nenhum vale.
+    if (p.startsWith('\\') || p.startsWith('//')) return;
+    // As regras são as do formato do caminho (as do projeto, para um relativo): o transcript vem do computador do agente.
+    if (p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p)) p = pathFlavor(p).normalize(p);
+    else if (project) p = pathFlavor(project).join(project, p);
+    else return;
     if (!pathProblem(p)) out.add(p);
   };
   for (const m of text.matchAll(LINK_RE)) add(m[1]);
@@ -303,7 +306,11 @@ export class DeliveryIndex {
     const id = `${s.account}:${s.sessionId}:${t.start.id}`;
     const attachments: DeliveryAttachment[] = [];
     const paths = new Map<string, string | undefined>();
-    for (const f of t.files) if (!pathProblem(f.path) && !paths.has(f.path)) paths.set(f.path, f.caption);
+    for (const f of t.files) {
+      // C:/a.png e C:\a.png são o mesmo arquivo (e o mesmo de um link para ele na resposta). O ".." é recusado antes.
+      const p = pathFlavor(f.path).normalize(f.path);
+      if (!pathProblem(f.path) && !pathProblem(p) && !paths.has(p)) paths.set(p, f.caption);
+    }
     for (const p of linkedFiles(text, s.project)) if (!paths.has(p)) paths.set(p, undefined);
     for (const [path, caption] of paths) {
       const ft = fileType(path);

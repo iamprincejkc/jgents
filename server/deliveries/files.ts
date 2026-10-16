@@ -2,10 +2,12 @@
 // só pede caminhos que estão numa entrega) e, mesmo assim, só tipos de ver (imagem, PDF, vídeo, página, texto) e nunca
 // algo com cara de segredo (.ssh, .env, chaves, credenciais...). Quem lê é o servidor (modo Node, ou pasta montada no
 // Docker) ou o auxiliar do host (scripts/codex-bridge.ts), que confere tudo de novo antes de ler.
+// Os caminhos vêm dos transcripts, isto é, do computador onde o agente rodou (no Docker, não é o do servidor): cada um
+// é lido pelo seu formato, POSIX (/Users/...) ou Windows (C:\Users\... ou C:/Users/...), e não pelo sistema que confere.
 // Node puro e sem dependências: também é importado pelo auxiliar do host (via tsx).
 import { existsSync, realpathSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { posix, win32 } from 'node:path';
 import type { DeliveryAttachmentKind } from '../../shared/types';
 import { tr } from '../../shared/i18n';
 
@@ -49,18 +51,44 @@ export function fileType(path: string): { kind: DeliveryAttachmentKind; type: st
   return TYPES[extensionOf(path)];
 }
 
+/** Caminho absoluto do Windows, com letra de unidade (C:\... ou C:/...). */
+const WINDOWS_ABSOLUTE = /^[A-Za-z]:[\\/]/;
+
+/** As funções de caminho do formato do caminho: as do Windows para C:\..., as do POSIX para o resto. */
+export function pathFlavor(path: string): typeof posix {
+  return WINDOWS_ABSOLUTE.test(path) ? win32 : posix;
+}
+
+/**
+ * Absoluto e local: /... (uma barra só) ou C:\... sem outro ":" (no Windows, ":" depois da unidade é um fluxo de dados
+ * alternativo, como "a.txt:x.png" ou ".ssh::$INDEX_ALLOCATION"). Duas barras no começo, de qualquer tipo, são um
+ * caminho de rede no Windows (\\servidor\pasta): abrir um faria o computador se conectar a outro.
+ */
+function isLocalAbsolute(path: string): boolean {
+  if (/^[\\/]{2}/.test(path)) return false;
+  return path.startsWith('/') || (WINDOWS_ABSOLUTE.test(path) && !path.includes(':', 2));
+}
+
 /** Motivo para NÃO mostrar o caminho (só olhando o texto), ou undefined. */
 export function pathProblem(path: string): string | undefined {
-  if (!path || path.includes('\0') || !path.startsWith('/') || /(^|\/)\.\.(\/|$)/.test(path)) return tr('caminho inválido');
+  if (!path || path.includes('\0') || !isLocalAbsolute(path) || /(^|[\\/])\.\.([\\/]|$)/.test(path)) return tr('caminho inválido');
   if (!fileType(path)) return tr('tipo de arquivo que não se mostra aqui');
-  if (SECRET_DIRS.test(path) || SECRET_NAMES.test(path)) return tr('arquivo protegido');
+  // As listas de segredos usam "/": no Windows, "\" também separa pastas.
+  const slashed = path.replace(/\\/g, '/');
+  if (SECRET_DIRS.test(slashed) || SECRET_NAMES.test(slashed)) return tr('arquivo protegido');
   return undefined;
 }
+
+/**
+ * Caminho real. No Windows, o do sistema (realpathSync.native): o realpathSync do Node mantém os nomes curtos 8.3
+ * (C:\Users\ana\JGENTS~1 é a .jgents) e o "::$INDEX_ALLOCATION", e com eles uma pasta protegida passaria pelas listas.
+ */
+export const realPath: (p: string) => string = process.platform === 'win32' ? realpathSync.native : realpathSync;
 
 /** Confere no disco (links resolvidos, tamanho, arquivo comum). Devolve o caminho real ou o motivo. */
 export function checkFile(
   path: string,
-  fs: { realpath(p: string): string; stat(p: string): { isFile(): boolean; size: number } } = { realpath: realpathSync, stat: statSync },
+  fs: { realpath(p: string): string; stat(p: string): { isFile(): boolean; size: number } } = { realpath: realPath, stat: statSync },
 ): { path: string; size: number } | { error: string } {
   const bad = pathProblem(path);
   if (bad) return { error: bad };
@@ -83,7 +111,7 @@ export function checkFile(
 export function tempRoots(): string[] {
   const out = new Set<string>(['/tmp', '/private/tmp', '/var/folders', '/private/var/folders']);
   try {
-    out.add(realpathSync(tmpdir()));
+    out.add(realPath(tmpdir()));
   } catch {
     out.add(tmpdir());
   }
@@ -99,12 +127,16 @@ export function insideKnownFolder(
   path: string,
   opts: { accountDirs: readonly string[]; roots: readonly string[]; exists?: (p: string) => boolean },
 ): boolean {
-  if (opts.roots.some((r) => r && path.startsWith(`${r.replace(/\/+$/, '')}/`))) return true;
+  const p = pathFlavor(path);
+  const file = p.normalize(path);
+  if (opts.roots.some((r) => r && file.startsWith(`${p.normalize(r).replace(/[\\/]+$/, '')}${p.sep}`))) return true;
   const exists = opts.exists ?? existsSync;
-  // Mesma codificação de sources/watcher.ts (encodeCwd): todo caractere não alfanumérico vira "-".
-  for (let dir = dirname(path); dir.split('/').filter(Boolean).length >= 2; dir = dirname(dir)) {
+  // Pastas abaixo da raiz (/ ou C:\): nunca "/Users" ou "C:\Users" inteira.
+  const depth = (dir: string) => dir.slice(p.parse(dir).root.length).split(p.sep).filter(Boolean).length;
+  // Mesma codificação de sources/watcher.ts (encodeCwd): todo caractere não alfanumérico vira "-" (D:\obra = D--obra).
+  for (let dir = p.dirname(file); depth(dir) >= 2; dir = p.dirname(dir)) {
     const encoded = dir.replace(/[^a-zA-Z0-9]/g, '-');
-    if (opts.accountDirs.some((acc) => exists(join(acc, 'projects', encoded)))) return true;
+    if (opts.accountDirs.some((acc) => exists(p.join(acc, 'projects', encoded)))) return true;
   }
   return false;
 }

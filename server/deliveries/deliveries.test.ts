@@ -64,6 +64,20 @@ describe('entregas: texto', () => {
     expect(linkedFiles('veja [a](telas/a.png) e [b](https://x.com/b.png) e /Users/ana/.ssh/k.png', '/Users/ana/proj')).toEqual(['/Users/ana/proj/telas/a.png']);
     expect(linkedFiles('[c](relativo.png)')).toEqual([]);
   });
+
+  it('links do Windows: C:/, C:\\ e file:///C:/, relativos à pasta do projeto e soltos; nada protegido nem de rede', () => {
+    const text = [
+      'Veja [o PDF](C:/Users/ana/proj/relatorio.pdf), [a tela](telas/a.png) e [b](file:///C:/Users/ana/proj/b.png).',
+      'Salvei em C:\\Users\\ana\\proj\\print.png. E [c](C:\\Users\\ana\\.ssh\\k.png), [d](\\\\servidor\\pasta\\d.png), [e](https://x.com/e.png).',
+    ].join('\n');
+    expect(linkedFiles(text, 'C:\\Users\\ana\\proj')).toEqual([
+      'C:\\Users\\ana\\proj\\relatorio.pdf',
+      'C:\\Users\\ana\\proj\\telas\\a.png',
+      'C:\\Users\\ana\\proj\\b.png',
+      'C:\\Users\\ana\\proj\\print.png',
+    ]);
+    expect(linkedFiles('[d](\\x\\d.png) e //servidor/pasta/e.png', 'C:\\Users\\ana\\proj')).toEqual([]);
+  });
 });
 
 describe('entregas: pedidos do transcript', () => {
@@ -101,11 +115,39 @@ describe('entregas: pedidos do transcript', () => {
     ]);
     expect(JSON.stringify(list)).not.toContain('/Users/ana/proj/print.png');
     expect(JSON.stringify(list)).not.toContain('.ssh');
+    expect(idx.attachment(d.attachments[1].id)).toMatchObject({ kind: 'file', path: '/Users/ana/proj/relatorio.pdf' });
     expect(idx.attachment(d.attachments[0].id)).toMatchObject({ kind: 'file', path: '/Users/ana/proj/print.png', type: 'image/png' });
     expect(idx.attachment(d.attachments[2].id)).toMatchObject({ kind: 'capture', type: 'image/png' });
     expect(idx.attachment('nao-existe')).toBeUndefined();
     // "De nada!" sem ferramentas não é entrega; o último pedido conta só quando o agente para.
     busy = false;
     expect((await idx.list()).map((x) => x.request)).toEqual(['Corrija o relatório de vendas']);
+  });
+
+  it('DeliveryIndex com caminhos do Windows: o arquivo mandado e os links para ele são um anexo só', async () => {
+    const dir = tempDir().dir;
+    const path = join(dir, 'w.jsonl');
+    const lines = [
+      user('w1', 0, 'Arrume a tela'),
+      tool('w2', 1, 'SendUserFile', { files: ['C:/Users/ana/proj/print.png', 'C:\\Users\\ana\\.ssh\\id_rsa.png', 'C:\\Users\\ana\\proj\\docs\\guia.docx'], caption: 'A tela nova' }),
+      say('w3', 2, 'A tela está arrumada e o guia foi atualizado. Veja [a tela](print.png) ou C:/Users/ana/proj/print.png.'),
+    ];
+    writeFileSync(path, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    const idx = new DeliveryIndex({
+      sessions: async () => [{ account: '.claude', sessionId: 'w', projectDir: 'p', project: 'C:\\Users\\ana\\proj', lastAt: 1, size: 1, open: false }],
+      resolve: () => ({ path, createParser: createTerminalParser }),
+      isBusy: () => false,
+    });
+    const list = await idx.list();
+    expect(list).toHaveLength(1);
+    const d = list[0];
+    expect(d.attachments.map((a) => [a.name, a.kind, a.caption ?? ''])).toEqual([
+      ['print.png', 'image', 'A tela nova'],
+      ['guia.docx', 'file', 'A tela nova'],
+    ]);
+    expect(idx.attachment(d.attachments[0].id)).toMatchObject({ kind: 'file', path: 'C:\\Users\\ana\\proj\\print.png', type: 'image/png' });
+    expect(idx.attachment(d.attachments[1].id)).toMatchObject({ kind: 'file', path: 'C:\\Users\\ana\\proj\\docs\\guia.docx' });
+    expect(JSON.stringify(list)).not.toContain('proj\\\\print.png');
+    expect(JSON.stringify(list)).not.toContain('.ssh');
   });
 });
