@@ -2,6 +2,7 @@
 // Regras: só fillRect com coordenadas inteiras (barato), sem getImageData e sem criar canvases.
 import type { Rect, ScreenMode } from './api';
 import { mix } from './core/color';
+import { tr } from '../../../shared/i18n';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -304,13 +305,20 @@ export function drawScreen(ctx: Ctx, r: Rect, mode: ScreenMode, t: number, seed:
 
 // ------------------------------------------------------------------ TV e videogame (vida social)
 
-/** Letras 3x5 para as vinhetas da TV ("GOL", "KO"): cada linha vira poucos fills (trechos contínuos). */
+/** Letras 3x5 para as vinhetas da TV ("GOL" no idioma ativo, "KO"): cada linha vira poucos fills (trechos contínuos). */
 const GLYPHS: Readonly<Record<string, readonly string[]>> = {
+  A: ['###', '#.#', '###', '#.#', '#.#'],
+  B: ['##.', '#.#', '##.', '#.#', '##.'],
   G: ['###', '#..', '#.#', '#.#', '###'],
   O: ['###', '#.#', '#.#', '#.#', '###'],
   L: ['#..', '#..', '#..', '#..', '###'],
   K: ['#.#', '##.', '#..', '##.', '#.#'],
+  T: ['###', '.#.', '.#.', '.#.', '.#.'],
+  U: ['#.#', '#.#', '#.#', '#.#', '###'],
 };
+
+/** A vinheta do gol no idioma ativo (GOAL, GOL, BUT): só letras que existem em GLYPHS. */
+const GOAL_WORD = tr('GOL');
 
 function drawWord(ctx: Ctx, word: string, x: number, y: number, c: string): void {
   for (let i = 0; i < word.length; i++) {
@@ -418,7 +426,7 @@ function drawFootball(ctx: Ctx, x: number, y: number, w: number, h: number, t: n
     fill(ctx, x, y + h - 1, w, 1, c);
     fill(ctx, x, y, 1, h, c);
     fill(ctx, x + w - 1, y, 1, h, c);
-    if (w >= 15 && h >= 9) banner(ctx, 'GOL', x, y, w, h, c);
+    if (w >= GOAL_WORD.length * 4 + 3 && h >= 9) banner(ctx, GOAL_WORD, x, y, w, h, c);
   }
 }
 
