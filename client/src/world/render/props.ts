@@ -293,28 +293,46 @@ function parasolSprite(seed: number): PropSprite {
   return { canvas: c, ax: 16, ay: 29 };
 }
 
-/** Totem da entrada com a marca (azul-marinho e laranja, como a placa da recepção). */
+/** Face do totem (8 px de largura, a partir de x=3, y=9): o ponto verde de "agente online" e o J âmbar do mark. */
+const TOTEM_FACE = [
+  '.....GG.',
+  '.....Gg.',
+  '........',
+  '.AAAAAA.',
+  '.aaaAAAn',
+  '..nnAAAn',
+  '....AAAn',
+  '....AAAn',
+  '....AAAn',
+  '....AAAn',
+  '.AA.AAAn',
+  '.AAnAAAn',
+  '.AAnAAAn',
+  '.aAAAAAn',
+  '..aAAAan',
+  '...nnnn.',
+];
+const TOTEM_COLORS: Readonly<Record<string, string>> = { A: '#fac665', a: '#d9902e', n: '#1a2340', G: '#67c53d', g: '#198834' };
+
+/** Totem da entrada com a marca: o tile azul-marinho do JGENTS (as cores de scripts/assets/pixelart.py). */
 function totemSprite(): PropSprite {
   const [c, ctx] = makeCanvas(14, 34);
   shadowEllipse(ctx, 7, 32, 6, 1.5, 0.25);
   ctx.fillStyle = '#141b30';
   ctx.fillRect(2, 2, 10, 30);
-  ctx.fillStyle = '#1c2541';
+  ctx.fillStyle = '#24304f';
   ctx.fillRect(3, 3, 8, 28);
-  ctx.fillStyle = '#2a355a';
+  ctx.fillStyle = '#34446e';
+  ctx.fillRect(3, 3, 8, 1);
   ctx.fillRect(3, 3, 1, 28);
-  // faixa laranja no topo, "H" claro e "b" laranja (as cores de "Hab" e "blaud" na placa)
-  ctx.fillStyle = '#f2a33a';
-  ctx.fillRect(3, 5, 8, 2);
-  ctx.fillStyle = '#f5f1e6';
-  ctx.fillRect(4, 11, 1, 6);
-  ctx.fillRect(8, 11, 1, 6);
-  ctx.fillRect(5, 13, 3, 1);
-  ctx.fillStyle = '#f2a33a';
-  ctx.fillRect(5, 19, 1, 6);
-  ctx.fillRect(6, 21, 2, 1);
-  ctx.fillRect(8, 22, 1, 2);
-  ctx.fillRect(6, 24, 2, 1);
+  TOTEM_FACE.forEach((row, y) =>
+    [...row].forEach((k, x) => {
+      const color = TOTEM_COLORS[k];
+      if (!color) return;
+      ctx.fillStyle = color;
+      ctx.fillRect(3 + x, 9 + y, 1, 1);
+    }),
+  );
   // base
   ctx.fillStyle = '#8d96a3';
   ctx.fillRect(1, 31, 12, 2);
