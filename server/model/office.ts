@@ -290,7 +290,7 @@ export class Office {
   }
 
   roomName(roomId: string): string {
-    return this.roomNames.get(roomId) ?? roomId.split('/').filter(Boolean).pop() ?? roomId;
+    return this.roomNames.get(roomId) ?? roomId.split(/[\\/]/).filter(Boolean).pop() ?? roomId;
   }
 
   detail(id: string): AgentDetail | undefined {

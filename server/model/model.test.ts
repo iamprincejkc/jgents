@@ -217,6 +217,14 @@ function makeOffice(names = new NameStore(null)) {
 const act = (id: string, at: number, kind: Activity['kind'] = 'read'): Activity => ({ id, at, kind, icon: '📖', text: 'Lendo x' });
 
 describe('Office', () => {
+  it('nome de uma sala sem registro: o último trecho do caminho, com / ou \\', () => {
+    const { office } = makeOffice();
+    expect(office.roomName('D:\\obra\\loja')).toBe('loja');
+    expect(office.roomName('D:/obra/loja')).toBe('loja');
+    expect(office.roomName('/p/loja')).toBe('loja');
+    expect(office.roomName('/')).toBe('/');
+  });
+
   it('avisos com dedupe de 10 s e feed em lote', () => {
     const { office, advance, now } = makeOffice();
     office.addMain({ id: 'acc:1', account: 'acc', sessionId: 's1', cwd: '/p/loja/', role: 'Agente principal', startedAt: now(), status: 'working' });

@@ -17,7 +17,7 @@
 // Arquivos e ditado usam rodadas com espera: o JGENTS só responde quando chega trabalho (ou a cada 20 s).
 // Ctrl+C para parar.
 import { statSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { basename, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isClaudeDir } from '../server/accounts/detect';
 import { createCodexQueueRunner, findCodexBin, THREAD_ID, type CodexQueueResult, type CodexQueueRunner } from '../server/messages/codex';
@@ -354,7 +354,7 @@ async function main(): Promise<void> {
   let transcribe: Transcriber | undefined;
   if ('missing' in whisper) log(tr('Ditado desligado: falta {0}.', [whisper.missing]));
   else {
-    log(tr('Ditado: Whisper local ({0}), idiomas {1} detectados sozinhos.', [whisper.model.split('/').pop(), whisper.langs.join('/')]));
+    log(tr('Ditado: Whisper local ({0}), idiomas {1} detectados sozinhos.', [basename(whisper.model), whisper.langs.join('/')]));
     transcribe = createWhisperTranscriber(whisper);
   }
   // Arquivos das entregas e ditado (a pessoa está esperando): rodadas com espera, cada uma no seu laço.
