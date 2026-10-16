@@ -33,10 +33,10 @@ describe('trava local', () => {
     expect((await request(srv.base, '/api/health')).json).toMatchObject({ permissions: false });
   });
 
-  it('Host que não é local (proxy/túnel de HABBLAUD_ALLOWED_HOSTS ou IP da rede): 403', async () => {
+  it('Host que não é local (proxy/túnel de JGENTS_ALLOWED_HOSTS ou IP da rede): 403', async () => {
     srv = await servePermissions();
     expect((await request(srv.base, '/api/health')).json).toMatchObject({ permissions: true });
-    for (const host of ['habblaud.lan', '192.168.0.10:4747']) {
+    for (const host of ['jgents.lan', '192.168.0.10:4747']) {
       const r = await request(srv.base, '/api/permissions', { method: 'POST', body: hookJson(), headers: { Host: host } });
       expect(r.status, host).toBe(403);
       expect(r.json).toMatchObject({ error: expect.stringMatching(/próprio computador/) });
@@ -180,7 +180,7 @@ describe('rotas', () => {
     const after = ((await request(srv.base, '/api/snapshot')).json as OfficeSnapshot).agents.find((a) => a.id === agentId)!;
     expect(after.permission).toBeUndefined();
     expect(after.status).toBe('working');
-    expect(after.recent.at(-1)).toMatchObject({ icon: '💬', text: 'Respondido no Habblaud' });
+    expect(after.recent.at(-1)).toMatchObject({ icon: '💬', text: 'Respondido no JGENTS' });
   });
 
   it('demo: o pedido fictício responde pela mesma rota', async () => {

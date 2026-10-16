@@ -1,4 +1,0 @@
-{
-  "description": "Hooks module of the Habblaud mod (plan usage, the notice under the prompt and /habblaud)",
-  "modules": ["./register.ts"]
-}

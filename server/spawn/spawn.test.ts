@@ -32,7 +32,7 @@ describe('novo agente: pedido e link', () => {
     const url = spawnUrl({ folder: '/Users/a/meu proj', prompt: 'rode os testes & conte' });
     expect(url.startsWith('claude://code/new?')).toBe(true);
     const q = new URL(url).searchParams;
-    expect([q.get('folder'), q.get('q'), q.get('source')]).toEqual(['/Users/a/meu proj', 'rode os testes & conte', 'habblaud']);
+    expect([q.get('folder'), q.get('q'), q.get('source')]).toEqual(['/Users/a/meu proj', 'rode os testes & conte', 'jgents']);
     expect(url).not.toContain('+');
     expect(new URL(spawnUrl({ folder: '/a', prompt: '  ' })).searchParams.has('q')).toBe(false);
   });
@@ -127,7 +127,7 @@ describe('SpawnService com anexos', () => {
     s.submit({ folder: '/p', prompt: 'conserte', attachments: ['f1'] });
     await new Promise((ok) => setTimeout(ok, 0));
     expect(written).toEqual(['s2:print.png']);
-    expect(new URL(opened[0]).searchParams.get('q')).toBe('conserte\n\nAnexo enviado pelo Habblaud (leia antes de começar):\n- /h/att/print.png');
+    expect(new URL(opened[0]).searchParams.get('q')).toBe('conserte\n\nAnexo enviado pelo JGENTS (leia antes de começar):\n- /h/att/print.png');
     expect(s.get('s2')?.status).toBe('opened');
   });
 
@@ -154,12 +154,12 @@ describe('SpawnService com anexos', () => {
 
 describe('novo agente em segundo plano (claude --bg)', () => {
   it('nome da sessão e argumentos: o pedido vai depois de `--`', () => {
-    expect(sessionName('  \n rode os testes\nsegunda linha')).toBe('Habblaud: rode os testes');
-    expect(sessionName('')).toBe('Habblaud');
-    expect(sessionName('x'.repeat(100))).toHaveLength('Habblaud: '.length + 48);
-    expect(cliArgs({ folder: '/p', prompt: 'doctor' })).toEqual(['--bg', '-n', 'Habblaud: doctor', '--', 'doctor']);
+    expect(sessionName('  \n rode os testes\nsegunda linha')).toBe('JGENTS: rode os testes');
+    expect(sessionName('')).toBe('JGENTS');
+    expect(sessionName('x'.repeat(100))).toHaveLength('JGENTS: '.length + 48);
+    expect(cliArgs({ folder: '/p', prompt: 'doctor' })).toEqual(['--bg', '-n', 'JGENTS: doctor', '--', 'doctor']);
     expect(cliArgs({ folder: '/p', prompt: '--dangerously-skip-permissions' }).slice(-2)).toEqual(['--', '--dangerously-skip-permissions']);
-    expect(cliArgs({ folder: '/p', prompt: '  ' })).toEqual(['--bg', '-n', 'Habblaud']);
+    expect(cliArgs({ folder: '/p', prompt: '  ' })).toEqual(['--bg', '-n', 'JGENTS']);
   });
 
   it('createCliRunner roda o binário na pasta, sem shell, e lê o id; erro vira a 1ª linha', async () => {
@@ -172,12 +172,12 @@ describe('novo agente em segundo plano (claude --bg)', () => {
     chmodSync(bin, 0o755);
     writeFileSync(join(dir, 'trusted'), '');
     expect(runnableClaudeBin({ PATH: `/nao/existe:${dir}` })).toBe(bin);
-    expect(runnableClaudeBin({ HABBLAUD_CLAUDE_BIN: join(dir, 'nada'), PATH: dir })).toBeUndefined();
+    expect(runnableClaudeBin({ JGENTS_CLAUDE_BIN: join(dir, 'nada'), PATH: dir })).toBeUndefined();
     const run = createCliRunner(bin);
     expect(await run({ folder: dir, prompt: 'faça $(rm -rf x) && y' })).toEqual({ ok: true, id: '7eacc670' });
     const args = readFileSync(join(dir, 'args'), 'utf8').trim().split('\n');
     expect(realpathSync(args[0])).toBe(realpathSync(dir));
-    expect(args.slice(1)).toEqual(['--bg', '-n', 'Habblaud: faça $(rm -rf x) && y', '--', 'faça $(rm -rf x) && y']);
+    expect(args.slice(1)).toEqual(['--bg', '-n', 'JGENTS: faça $(rm -rf x) && y', '--', 'faça $(rm -rf x) && y']);
     expect(await run({ folder: tmpdir(), prompt: 'oi' })).toEqual({ ok: false, error: 'Workspace not trusted. Run claude once' });
   });
 

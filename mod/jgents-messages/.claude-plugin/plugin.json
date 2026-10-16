@@ -1,0 +1,11 @@
+{
+  "name": "jgents-messages",
+  "displayName": "JGENTS: messages from the office",
+  "version": "0.11.0",
+  "description": "Delivers the messages you type in JGENTS (agent panel or terminal) to the Claude Code session, as if you had typed them in its terminal.",
+  "author": { "name": "JKC", "url": "https://github.com/iamprincejkc" },
+  "homepage": "https://github.com/iamprincejkc/jgents#readme",
+  "repository": "https://github.com/iamprincejkc/jgents",
+  "license": "MIT",
+  "keywords": ["jgents", "office", "messages", "prompt"]
+}

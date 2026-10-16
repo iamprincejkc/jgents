@@ -1,4 +1,0 @@
-{
-  "description": "Hooks module of the Habblaud messages plugin (fetches the messages typed in the office and sends them to the session as yours)",
-  "modules": ["./register.ts"]
-}

@@ -54,11 +54,11 @@ export function resolveExecutable(nameOrPath: string, env: NodeJS.ProcessEnv = p
 }
 
 /**
- * O executável do Claude Code: HABBLAUD_CLAUDE_BIN (um caminho, ou um nome procurado
+ * O executável do Claude Code: JGENTS_CLAUDE_BIN (um caminho, ou um nome procurado
  * no PATH) ou o `claude` do PATH. undefined se não achar.
  */
 export function claudeBinFrom(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | undefined {
-  return resolveExecutable(env.HABBLAUD_CLAUDE_BIN?.trim() || 'claude', env, platform);
+  return resolveExecutable(env.JGENTS_CLAUDE_BIN?.trim() || 'claude', env, platform);
 }
 
 /** O `claude` que dá para rodar: o de claudeBinFrom, se o arquivo existe e é executável. */

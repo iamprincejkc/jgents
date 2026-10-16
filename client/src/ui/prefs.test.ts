@@ -85,22 +85,22 @@ describe('preferências', () => {
   });
 });
 
-describe('migração do nome antigo (CodeTown)', () => {
+describe('migração do nome antigo (Habblaud)', () => {
   it('move as chaves para o prefixo novo e apaga as antigas', () => {
     const prefs = JSON.stringify({ ...DEFAULT_PREFS, bubbles: 'none' });
     const wallets = JSON.stringify({ v: 1, wallets: { a1: { name: 'Ana', coins: 250 } } });
-    const st = listableStorage({ 'codetown:prefs': prefs, 'codetown:update-seen': '0.3.2', 'codetown.wallets.v1': wallets });
+    const st = listableStorage({ 'habblaud:prefs': prefs, 'habblaud:update-seen': '0.3.2', 'habblaud.wallets.v1': wallets });
     expect(migrateLegacyKeys(st)).toBe(3);
-    expect(Object.fromEntries(st.data)).toEqual({ 'habblaud:prefs': prefs, 'habblaud:update-seen': '0.3.2', 'habblaud.wallets.v1': wallets });
+    expect(Object.fromEntries(st.data)).toEqual({ 'jgents:prefs': prefs, 'jgents:update-seen': '0.3.2', 'jgents.wallets.v1': wallets });
     expect(loadPrefs(st).bubbles).toBe('none');
   });
   it('não sobrescreve a chave nova que já existe, mas apaga a antiga', () => {
-    const st = listableStorage({ 'codetown:prefs': '{"bubbles":"none"}', [PREFS_KEY]: '{"bubbles":"all"}' });
+    const st = listableStorage({ 'habblaud:prefs': '{"bubbles":"none"}', [PREFS_KEY]: '{"bubbles":"all"}' });
     expect(migrateLegacyKeys(st)).toBe(0);
     expect(Object.fromEntries(st.data)).toEqual({ [PREFS_KEY]: '{"bubbles":"all"}' });
   });
   it('ignora chaves sem o prefixo antigo', () => {
-    const st = listableStorage({ 'outra:coisa': '1', codetown: '2', 'codetownx:prefs': '3', 'meu.codetown:prefs': '4' });
+    const st = listableStorage({ 'outra:coisa': '1', habblaud: '2', 'habblaudx:prefs': '3', 'meu.habblaud:prefs': '4' });
     expect(migrateLegacyKeys(st)).toBe(0);
     expect(st.data.size).toBe(4);
     expect(migrateLegacyKeys(listableStorage())).toBe(0);
@@ -115,11 +115,11 @@ describe('migração do nome antigo (CodeTown)', () => {
     };
     expect(migrateLegacyKeys(blocked)).toBe(0);
     // cota cheia: a chave antiga fica para a próxima vez
-    const full = listableStorage({ 'codetown:prefs': '{}' });
+    const full = listableStorage({ 'habblaud:prefs': '{}' });
     full.setItem = () => {
       throw new Error('cheio');
     };
     expect(migrateLegacyKeys(full)).toBe(0);
-    expect(Object.fromEntries(full.data)).toEqual({ 'codetown:prefs': '{}' });
+    expect(Object.fromEntries(full.data)).toEqual({ 'habblaud:prefs': '{}' });
   });
 });

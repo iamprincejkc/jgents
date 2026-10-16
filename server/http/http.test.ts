@@ -29,7 +29,7 @@ async function start(extra: Partial<ApiDeps> = {}, officeExtra: Partial<OfficeDe
   const dist = join(tmp.dir, 'dist');
   mkdirSync(join(dist, 'assets', 'brand'), { recursive: true });
   mkdirSync(join(dist, 'bundle'), { recursive: true });
-  writeFileSync(join(dist, 'index.html'), '<!doctype html><title>Habblaud</title>');
+  writeFileSync(join(dist, 'index.html'), '<!doctype html><title>JGENTS</title>');
   writeFileSync(join(dist, 'bundle', 'main-abc12345.js'), 'console.log(1)');
   writeFileSync(join(dist, 'assets', 'brand', 'logo-mark.png'), 'png');
   writeFileSync(join(dist, 'assets', 'manifest.json'), '{}');
@@ -49,7 +49,7 @@ async function start(extra: Partial<ApiDeps> = {}, officeExtra: Partial<OfficeDe
   hub.start();
   const api = createApiHandler({ office, hub, accounts, sources: () => [], version: '9.9.9', inDocker: false, ...extra });
   const serveStatic = createStaticHandler(dist);
-  const guard = createRequestGuard({ allowedHosts: new Set(['habblaud.lan']) });
+  const guard = createRequestGuard({ allowedHosts: new Set(['jgents.lan']) });
   const server = http.createServer((req, res) => {
     if (guard(req, res)) return;
     const url = new URL(req.url ?? '/', 'http://x');
@@ -203,7 +203,7 @@ describe('API HTTP', () => {
     expect((await raw(env.base, '/api/health', { headers: { Host: `localhost:${port}` } })).status).toBe(200);
     expect((await raw(env.base, '/api/health', { headers: { Host: `[::1]:${port}` } })).status).toBe(200);
     expect((await raw(env.base, '/api/health', { headers: { Host: `192.168.0.10:${port}` } })).status).toBe(200);
-    expect((await raw(env.base, '/api/health', { headers: { Host: `habblaud.lan:${port}` } })).status).toBe(200);
+    expect((await raw(env.base, '/api/health', { headers: { Host: `jgents.lan:${port}` } })).status).toBe(200);
   });
 
   it('CSRF: POST exige JSON e origem local', async () => {
@@ -239,7 +239,7 @@ describe('API HTTP', () => {
   it('estáticos: SPA fallback, immutable só no /bundle (hash) e revalidação no resto', async () => {
     const page = await fetch(`${env.base}/sala/qualquer`);
     expect(page.status).toBe(200);
-    expect(await page.text()).toContain('<title>Habblaud</title>');
+    expect(await page.text()).toContain('<title>JGENTS</title>');
     expect(page.headers.get('cache-control')).toBe(REVALIDATE);
     expect(page.headers.get('x-frame-options')).toBe('DENY');
     const bundle = await fetch(`${env.base}/bundle/main-abc12345.js`);
@@ -264,7 +264,7 @@ describe('API HTTP', () => {
     expect((await fetch(`${env.base}/bundle/nao-existe.js`)).status).toBe(404);
     // Tentativa de sair da pasta cai no index.html, nunca em arquivos de fora.
     const escape = await fetch(`${env.base}/..%2F..%2Fetc%2Fpasswd`);
-    expect(await escape.text()).toContain('<title>Habblaud</title>');
+    expect(await escape.text()).toContain('<title>JGENTS</title>');
   });
 });
 
@@ -323,11 +323,11 @@ describe('personagem do projeto (PUT/DELETE /api/agents/:id/character)', () => {
     expect(((await res.json()) as { error: string }).error).toBe(`${other} já está no escritório em web`);
   });
 
-  it('403 com Host que não é local (mesmo liberado em HABBLAUD_ALLOWED_HOSTS); 405 para GET', async () => {
+  it('403 com Host que não é local (mesmo liberado em JGENTS_ALLOWED_HOSTS); 405 para GET', async () => {
     const port = new URL(env.base).port;
     const r = await raw(env.base, `/api/agents/${encodeURIComponent('.claude:1')}/character`, {
       method: 'PUT',
-      headers: { ...JSON_HEADERS, Host: `habblaud.lan:${port}` },
+      headers: { ...JSON_HEADERS, Host: `jgents.lan:${port}` },
       body: JSON.stringify({ name: 'Ana', seed: 1, parts: {} }),
     });
     expect(r.status).toBe(403);
@@ -404,10 +404,10 @@ describe('GET /api/mod/summary (mod do Claude Code)', () => {
 });
 
 describe('guarda de Host/Origin', () => {
-  const allowed = parseAllowedHosts(' Meu-Mac.local:4747 , habblaud.lan ');
+  const allowed = parseAllowedHosts(' Meu-Mac.local:4747 , jgents.lan ');
 
-  it('hostnameOf e HABBLAUD_ALLOWED_HOSTS', () => {
-    expect([...allowed]).toEqual(['meu-mac.local', 'habblaud.lan']);
+  it('hostnameOf e JGENTS_ALLOWED_HOSTS', () => {
+    expect([...allowed]).toEqual(['meu-mac.local', 'jgents.lan']);
     expect(hostnameOf('LocalHost:4747')).toBe('localhost');
     expect(hostnameOf('[::1]:4747')).toBe('::1');
     expect(hostnameOf('a b')).toBeUndefined();
@@ -422,7 +422,7 @@ describe('guarda de Host/Origin', () => {
 
   it('isLoopbackHost: só localhost, *.localhost, 127.x e ::1 (terminal)', () => {
     for (const h of ['localhost:4747', 'LOCALHOST', 'app.localhost:1', '127.0.0.1:4747', '127.8.9.10', '[::1]:4747']) expect(isLoopbackHost(h)).toBe(true);
-    for (const h of [undefined, '', '10.0.0.5:4747', '192.168.0.10', '0.0.0.0:4747', 'habblaud.lan', 'meu-mac.local:4747', '[::]:4747', 'localhost.attacker.example', '127.0.0.1.nip.io', 'x y']) {
+    for (const h of [undefined, '', '10.0.0.5:4747', '192.168.0.10', '0.0.0.0:4747', 'jgents.lan', 'meu-mac.local:4747', '[::]:4747', 'localhost.attacker.example', '127.0.0.1.nip.io', 'x y']) {
       expect(isLoopbackHost(h)).toBe(false);
     }
   });

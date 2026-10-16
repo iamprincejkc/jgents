@@ -41,26 +41,26 @@ describe('senha (scrypt)', () => {
 
 describe('.env', () => {
   it('troca só as chaves pedidas, remove com null e mantém comentários', () => {
-    const before = '# meu .env\nHABBLAUD_PORT=4848\nHABBLAUD_REMOTE_PASSWORD=texto\nHABBLAUD_REMOTE_USER=a\nHABBLAUD_REMOTE_USER=b\n';
-    const after = updateEnv(before, { HABBLAUD_REMOTE_USER: 'ana', HABBLAUD_REMOTE_PASSWORD: null, HABBLAUD_REMOTE_NAME: 'meuclaude' });
-    expect(after).toBe('# meu .env\nHABBLAUD_PORT=4848\nHABBLAUD_REMOTE_USER=ana\nHABBLAUD_REMOTE_NAME=meuclaude\n');
-    expect(readEnvValue(after, 'HABBLAUD_REMOTE_NAME')).toBe('meuclaude');
+    const before = '# meu .env\nJGENTS_PORT=4848\nJGENTS_REMOTE_PASSWORD=texto\nJGENTS_REMOTE_USER=a\nJGENTS_REMOTE_USER=b\n';
+    const after = updateEnv(before, { JGENTS_REMOTE_USER: 'ana', JGENTS_REMOTE_PASSWORD: null, JGENTS_REMOTE_NAME: 'meuclaude' });
+    expect(after).toBe('# meu .env\nJGENTS_PORT=4848\nJGENTS_REMOTE_USER=ana\nJGENTS_REMOTE_NAME=meuclaude\n');
+    expect(readEnvValue(after, 'JGENTS_REMOTE_NAME')).toBe('meuclaude');
     expect(readEnvValue('X="a b"\n', 'X')).toBe('a b');
     expect(addToList('a.lan, b', 'b', 'c.local')).toBe('a.lan,b,c.local');
   });
   it('remoteEnv do setup: hash no lugar da senha, nomes liberados no Host, bind aberto', () => {
-    const env = remoteEnv('HABBLAUD_REMOTE_PASSWORD=velha\nHABBLAUD_ALLOWED_HOSTS=casa.lan\n', {
+    const env = remoteEnv('JGENTS_REMOTE_PASSWORD=velha\nJGENTS_ALLOWED_HOSTS=casa.lan\n', {
       user: 'ana',
       hash: 'scrypt:15:8:1:sal:hash',
       name: 'myclaude',
       domain: 'myclaude.home',
       port: 443,
     });
-    expect(env).not.toContain('HABBLAUD_REMOTE_PASSWORD=');
-    expect(readEnvValue(env, 'HABBLAUD_REMOTE_PASSWORD_HASH')).toBe('scrypt:15:8:1:sal:hash');
-    expect(readEnvValue(env, 'HABBLAUD_ALLOWED_HOSTS')).toBe('casa.lan,myclaude.local,myclaude.home');
-    expect(readEnvValue(env, 'HABBLAUD_REMOTE_BIND')).toBe('0.0.0.0');
-    expect(readEnvValue(env, 'HABBLAUD_REMOTE_PORT')).toBe('443');
+    expect(env).not.toContain('JGENTS_REMOTE_PASSWORD=');
+    expect(readEnvValue(env, 'JGENTS_REMOTE_PASSWORD_HASH')).toBe('scrypt:15:8:1:sal:hash');
+    expect(readEnvValue(env, 'JGENTS_ALLOWED_HOSTS')).toBe('casa.lan,myclaude.local,myclaude.home');
+    expect(readEnvValue(env, 'JGENTS_REMOTE_BIND')).toBe('0.0.0.0');
+    expect(readEnvValue(env, 'JGENTS_REMOTE_PORT')).toBe('443');
   });
 });
 
@@ -90,25 +90,25 @@ describe('setup e anúncio', () => {
     expect(isValidDomain('10.0.0.1')).toBe(false);
     expect(mdnsCommand('darwin', 'myclaude', '192.168.1.10', 443)).toEqual({
       cmd: 'dns-sd',
-      args: ['-P', 'Habblaud (myclaude)', '_https._tcp', 'local', '443', 'myclaude.local', '192.168.1.10'],
+      args: ['-P', 'JGENTS (myclaude)', '_https._tcp', 'local', '443', 'myclaude.local', '192.168.1.10'],
     });
     expect(mdnsCommand('linux', 'myclaude', '192.168.1.10', 443)).toEqual({ cmd: 'avahi-publish', args: ['-a', '-R', 'myclaude.local', '192.168.1.10'] });
     expect(mdnsCommand('win32', 'myclaude', '192.168.1.10', 443)).toBeUndefined();
   });
   it('docker-up monta SÓ a pasta do certificado do servidor, somente leitura', () => {
-    const yaml = renderOverride([], new Date(0), undefined, undefined, [], '/h/.habblaud/remote-tls/server');
-    expect(yaml).toContain('source: "/h/.habblaud/remote-tls/server"');
+    const yaml = renderOverride([], new Date(0), undefined, undefined, [], '/h/.jgents/remote-tls/server');
+    expect(yaml).toContain('source: "/h/.jgents/remote-tls/server"');
     expect(yaml).toContain('target: "/remote-tls"');
     expect(yaml).not.toContain('remote-tls/ca');
   });
   it('só publica a porta remota (e a do redirecionamento http:// -> https://) com o acesso configurado', () => {
     expect(remotePortsFrom('')).toEqual([]);
-    expect(remotePortsFrom('HABBLAUD_REMOTE_PORT=443\nHABBLAUD_REMOTE_HTTP_PORT=80\n')).toEqual([]);
-    expect(remotePortsFrom('HABBLAUD_REMOTE_USER=ana\nHABBLAUD_REMOTE_PORT=443\nHABBLAUD_REMOTE_HTTP_PORT=80\nHABBLAUD_REMOTE_BIND=0.0.0.0\n')).toEqual([
+    expect(remotePortsFrom('JGENTS_REMOTE_PORT=443\nJGENTS_REMOTE_HTTP_PORT=80\n')).toEqual([]);
+    expect(remotePortsFrom('JGENTS_REMOTE_USER=ana\nJGENTS_REMOTE_PORT=443\nJGENTS_REMOTE_HTTP_PORT=80\nJGENTS_REMOTE_BIND=0.0.0.0\n')).toEqual([
       '0.0.0.0:443:4748',
       '0.0.0.0:80:4748',
     ]);
-    expect(remotePortsFrom('HABBLAUD_REMOTE_USER=ana\n')).toEqual(['127.0.0.1:4748:4748']);
+    expect(remotePortsFrom('JGENTS_REMOTE_USER=ana\n')).toEqual(['127.0.0.1:4748:4748']);
     const yaml = renderOverride([], new Date(0), undefined, undefined, [], undefined, ['0.0.0.0:80:4748']);
     expect(yaml).toMatch(/    ports:\n      - "0\.0\.0\.0:80:4748"/);
   });
@@ -232,7 +232,7 @@ describe.skipIf(!HAS_OPENSSL)('certificados (openssl)', () => {
       req.end();
     });
     expect(redirect).toEqual({ status: 308, location: `https://myclaude.local:${port}/x?y=1` });
-    // Nome que o Habblaud não conhece não vira redirecionamento (nada de mandar o navegador para outro lugar).
+    // Nome que o JGENTS não conhece não vira redirecionamento (nada de mandar o navegador para outro lugar).
     const foreign = await new Promise<number>((ok, fail) => {
       const req = http.request({ host: '127.0.0.1', port, path: '/', headers: { Host: 'evil.example' } }, (res) => {
         res.resume();
@@ -258,11 +258,11 @@ describe('docker-compose.yml', () => {
     const compose = readFileSync(join(__dirname, '..', '..', 'docker-compose.yml'), 'utf8');
     const server = readFileSync(join(__dirname, '..', 'http', 'remote.ts'), 'utf8');
     // No Docker, porta, host e pasta do certificado são fixos (4748, 0.0.0.0, /remote-tls): o resto precisa vir do .env.
-    const fixedInDocker = new Set(['HABBLAUD_REMOTE_PORT', 'HABBLAUD_REMOTE_HOST', 'HABBLAUD_REMOTE_TLS_DIR', 'HABBLAUD_REMOTE_PASSWORD']);
-    const read = [...new Set([...server.matchAll(/env\.(HABBLAUD_REMOTE_[A-Z_]+)/g)].map((m) => m[1]))].filter((k) => !fixedInDocker.has(k));
-    expect(read.sort()).toEqual(['HABBLAUD_REMOTE_ALLOW', 'HABBLAUD_REMOTE_INSECURE_HTTP', 'HABBLAUD_REMOTE_PASSWORD_HASH', 'HABBLAUD_REMOTE_USER']);
+    const fixedInDocker = new Set(['JGENTS_REMOTE_PORT', 'JGENTS_REMOTE_HOST', 'JGENTS_REMOTE_TLS_DIR', 'JGENTS_REMOTE_PASSWORD']);
+    const read = [...new Set([...server.matchAll(/env\.(JGENTS_REMOTE_[A-Z_]+)/g)].map((m) => m[1]))].filter((k) => !fixedInDocker.has(k));
+    expect(read.sort()).toEqual(['JGENTS_REMOTE_ALLOW', 'JGENTS_REMOTE_INSECURE_HTTP', 'JGENTS_REMOTE_PASSWORD_HASH', 'JGENTS_REMOTE_USER']);
     for (const key of read) expect(compose, key).toMatch(new RegExp(`^\\s+${key}: \\$\\{${key}:-\\}$`, 'm'));
-    expect(compose).not.toMatch(/HABBLAUD_REMOTE_PASSWORD: /);
+    expect(compose).not.toMatch(/JGENTS_REMOTE_PASSWORD: /);
     // A porta remota só é publicada pelo override do docker:up, depois do setup.
     expect(compose).not.toMatch(/4748/);
   });

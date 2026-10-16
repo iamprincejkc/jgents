@@ -1,0 +1,11 @@
+{
+  "name": "jgents-permissions",
+  "displayName": "JGENTS: permissions from the office",
+  "version": "0.11.0",
+  "description": "PermissionRequest hook that lets you approve or deny Claude Code's permission requests and answer AskUserQuestion questions from JGENTS; the dialog stays in the terminal and whichever answer comes first wins.",
+  "author": { "name": "JKC", "url": "https://github.com/iamprincejkc" },
+  "homepage": "https://github.com/iamprincejkc/jgents#readme",
+  "repository": "https://github.com/iamprincejkc/jgents",
+  "license": "MIT",
+  "keywords": ["jgents", "permissions", "hooks"]
+}

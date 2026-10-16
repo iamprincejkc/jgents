@@ -126,7 +126,7 @@ describe('MessageRegistry: mandar', () => {
   it('agente desconhecido (not-found), sem o plugin conectado ou que saiu (unavailable, com o motivo)', () => {
     const { office, registry } = setup();
     expect(registry.send({ agentId: 'nao-existe', text: 'oi' })).toEqual({ error: 'not-found' });
-    expect(registry.send({ agentId: MAIN, text: 'oi' })).toEqual({ error: 'unavailable', reason: expect.stringMatching(/habblaud-mensagens/) });
+    expect(registry.send({ agentId: MAIN, text: 'oi' })).toEqual({ error: 'unavailable', reason: expect.stringMatching(/jgents-messages/) });
     registry.inbox({ session: SESSION });
     office.closeMain(MAIN);
     expect(registry.send({ agentId: MAIN, text: 'oi' })).toEqual({ error: 'unavailable', reason: expect.stringMatching(/saiu/) });
@@ -195,7 +195,7 @@ describe('MessageRegistry: entrega pelo plugin', () => {
     const commit = office.commit();
     const feed = commit.feed.map((f) => f.activity);
     expect(feed).toHaveLength(1);
-    expect(feed[0]).toMatchObject({ kind: 'communicate', icon: '✉️', text: 'Mensagem pelo Habblaud', at: clock.now() });
+    expect(feed[0]).toMatchObject({ kind: 'communicate', icon: '✉️', text: 'Mensagem pelo JGENTS', at: clock.now() });
     expect(feed[0].detail).not.toContain(secret);
     expect(feed[0].detail!.length).toBeLessThanOrEqual(300);
     expect(feed[0].detail).toMatch(/^Use /);
@@ -315,7 +315,7 @@ describe('MessageRegistry: demo', () => {
     registry.tick();
     expect(registry.get(id)?.status).toBe('delivered');
     const after = office.commit().snapshot.agents.find((a) => a.id === demo.id)!;
-    expect(after.recent.at(-1)).toMatchObject({ kind: 'communicate', text: 'Mensagem pelo Habblaud', detail: 'oi, demo' });
+    expect(after.recent.at(-1)).toMatchObject({ kind: 'communicate', text: 'Mensagem pelo JGENTS', detail: 'oi, demo' });
   });
 
   it('demo desligado no meio do caminho: a mensagem falha (o agente saiu)', () => {

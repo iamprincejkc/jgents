@@ -1,25 +1,25 @@
 {
-  "name": "habblaud",
-  "owner": { "name": "Márcio Junior", "url": "https://github.com/marmottajr" },
-  "description": "Habblaud plugins: the pixel-art virtual office of your Claude Code sessions.",
+  "name": "jgents",
+  "owner": { "name": "JKC", "url": "https://github.com/iamprincejkc" },
+  "description": "JGENTS plugins: the pixel-art virtual office of your Claude Code sessions.",
   "version": "0.11.0",
   "plugins": [
     {
-      "name": "habblaud",
-      "source": "./mod/habblaud",
-      "description": "Habblaud mod: plan usage (5-hour and weekly) for the office, a notice under the prompt when another session needs you, and the /habblaud command.",
+      "name": "jgents",
+      "source": "./mod/jgents",
+      "description": "JGENTS mod: plan usage (5-hour and weekly) for the office, a notice under the prompt when another session needs you, and the /jgents command.",
       "category": "productivity"
     },
     {
-      "name": "habblaud-permissoes",
-      "source": "./mod/habblaud-permissoes",
-      "description": "Approve or deny Claude Code's permission requests and answer the agent's questions from Habblaud (PermissionRequest hook).",
+      "name": "jgents-permissions",
+      "source": "./mod/jgents-permissions",
+      "description": "Approve or deny Claude Code's permission requests and answer the agent's questions from JGENTS (PermissionRequest hook).",
       "category": "productivity"
     },
     {
-      "name": "habblaud-mensagens",
-      "source": "./mod/habblaud-mensagens",
-      "description": "Send messages from Habblaud: what you type in the office goes into the session as if you had typed it in the terminal.",
+      "name": "jgents-messages",
+      "source": "./mod/jgents-messages",
+      "description": "Send messages from JGENTS: what you type in the office goes into the session as if you had typed it in the terminal.",
       "category": "productivity"
     }
   ]

@@ -1,4 +1,4 @@
-// Sobe (ou derruba) o Habblaud no Docker local. Roda no HOST, com tsx:
+// Sobe (ou derruba) o JGENTS no Docker local. Roda no HOST, com tsx:
 //
 //   npm run docker:up                 # detecta as contas, gera o override, constrói e sobe
 //   npm run docker:up -- --no-build   # sobe sem reconstruir a imagem
@@ -6,27 +6,27 @@
 //
 // O que ele faz ao subir:
 // 1. Descobre os config dirs do Claude Code no host (mesma regra do servidor: ~/.claude*,
-//    CLAUDE_CONFIG_DIR ou HABBLAUD_CLAUDE_DIRS) e lê os metadados das contas com detectAccounts.
+//    CLAUDE_CONFIG_DIR ou JGENTS_CLAUDE_DIRS) e lê os metadados das contas com detectAccounts.
 // 2. Gera o docker-compose.override.yml montando SOMENTE <conta>/projects e <conta>/sessions,
 //    somente leitura, em /claude/<conta>/... — nunca a pasta inteira da conta, onde ficam
 //    credenciais e configurações — e a pasta do uso capturado pelo statusline
-//    (~/.habblaud/usage, criada se faltar) em /usage, também somente leitura. Passa
-//    HABBLAUD_CLAUDE_DIRS, HABBLAUD_ACCOUNTS, HABBLAUD_USAGE_DIR e o fuso do host (TZ) ao container.
-//    Contas do Codex (~/.codex*, CODEX_HOME ou HABBLAUD_CODEX_DIRS; HABBLAUD_CODEX=0 desliga): SOMENTE
+//    (~/.jgents/usage, criada se faltar) em /usage, também somente leitura. Passa
+//    JGENTS_CLAUDE_DIRS, JGENTS_ACCOUNTS, JGENTS_USAGE_DIR e o fuso do host (TZ) ao container.
+//    Contas do Codex (~/.codex*, CODEX_HOME ou JGENTS_CODEX_DIRS; JGENTS_CODEX=0 desliga): SOMENTE
 //    sessions/, archived_sessions/ e thread-writer-locks/ de cada uma, somente leitura, em /codex/<conta>/... —
-//    nunca auth.json, config.toml, shell_snapshots/, history.jsonl, logs nem os SQLite. Vão em HABBLAUD_CODEX_DIRS
-//    e, com `provider: 'codex'` e a pasta do HOST (onde o `codex queue` roda), em HABBLAUD_ACCOUNTS.
-// 3. Migra o que sobrou do nome antigo (CodeTown, até a 0.3.2): ~/.codetown vira ~/.habblaud, o container
-//    `codetown` e a rede codetown_default saem e, se o volume novo ainda não existe, os dados de
-//    codetown_codetown-data são copiados para ele (o antigo fica, para apagar à mão). Avisa de CODETOWN_*
+//    nunca auth.json, config.toml, shell_snapshots/, history.jsonl, logs nem os SQLite. Vão em JGENTS_CODEX_DIRS
+//    e, com `provider: 'codex'` e a pasta do HOST (onde o `codex queue` roda), em JGENTS_ACCOUNTS.
+// 3. Migra o que sobrou do nome antigo (Habblaud, até a 0.11.0): ~/.habblaud vira ~/.jgents, o container
+//    `habblaud` e a rede habblaud_default saem e, se o volume novo ainda não existe, os dados de
+//    habblaud_habblaud-data são copiados para ele (o antigo fica, para apagar à mão). Avisa de HABBLAUD_*
 //    no ambiente e no .env, que não valem mais.
 // 4. Roda `docker compose up -d --build`, espera o /api/health e mostra a URL.
-// 5. Atualiza o mod do Habblaud nas contas onde ele JÁ está instalado com outra versão (depois de
-//    atualizar o Habblaud): relê o marketplace desta pasta e roda `claude plugin update` com o
+// 5. Atualiza o mod do JGENTS nas contas onde ele JÁ está instalado com outra versão (depois de
+//    atualizar o JGENTS): relê o marketplace desta pasta e roda `claude plugin update` com o
 //    CLAUDE_CONFIG_DIR de cada conta. Nunca instala sozinho; se o `claude` faltar ou falhar, é só um aviso. Numa
 //    conta com o mod e sem o plugin de mensagens (que veio depois), só dá a dica de rodar o npm run mod:install.
 //
-// Uso de 5h/semanal ao vivo: o mod do Habblaud (npm run mod:install; Claude Code 2.1.287+) ou, em
+// Uso de 5h/semanal ao vivo: o mod do JGENTS (npm run mod:install; Claude Code 2.1.287+) ou, em
 // versões anteriores, o tap de statusline (npm run usage:install). Os dois gravam os números na pasta
 // montada em /usage. Sem eles, vale o cache do /usage lido das contas ao subir.
 import { spawnSync } from 'node:child_process';
@@ -45,17 +45,17 @@ import { ensureServerCert, remoteTargets, remoteTlsBase, tlsPaths } from '../ser
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOME = process.env.HOME || homedir();
-const STATE_DIR = join(HOME, '.habblaud');
+const STATE_DIR = join(HOME, '.jgents');
 const OVERRIDE_FILE = join(ROOT, 'docker-compose.override.yml');
 /** O .env desta pasta, que o Compose lê sozinho. */
 const ENV_FILE = join(ROOT, '.env');
-/** Uso capturado no host pelo mod do Habblaud ou pelo tap de statusline (scripts/statusline-tap.mjs). */
-const USAGE_DIR = process.env.HABBLAUD_USAGE_DIR?.trim() ? resolve(process.env.HABBLAUD_USAGE_DIR.trim()) : join(STATE_DIR, 'usage');
+/** Uso capturado no host pelo mod do JGENTS ou pelo tap de statusline (scripts/statusline-tap.mjs). */
+const USAGE_DIR = process.env.JGENTS_USAGE_DIR?.trim() ? resolve(process.env.JGENTS_USAGE_DIR.trim()) : join(STATE_DIR, 'usage');
 /** Onde essa pasta aparece no container. */
 const CONTAINER_USAGE_DIR = '/usage';
 /** Onde o container lê o certificado do acesso remoto (server/http/remote.ts). */
 const CONTAINER_REMOTE_TLS_DIR = '/remote-tls';
-const SERVICE = 'habblaud';
+const SERVICE = 'jgents';
 /** Raiz das montagens dentro do container: /claude/<conta>/{projects,sessions}. */
 const CONTAINER_ROOT = '/claude';
 /** Somente estas subpastas de cada conta entram no container. */
@@ -69,10 +69,10 @@ const CODEX_CONTAINER_ROOT = '/codex';
 export const CODEX_MOUNTED_SUBDIRS = ['sessions', 'archived_sessions', 'thread-writer-locks'] as const;
 const DEFAULT_PORT = 4747;
 const HEALTH_TIMEOUT_MS = 120_000;
-/** Imagem e volume de dados como o Compose os nomeia (`name: habblaud` no docker-compose.yml). */
-const IMAGE = 'habblaud:local';
-const DATA_VOLUME = 'habblaud_habblaud-data';
-/** O mesmo no CodeTown (até a 0.3.2), só para a migração: container_name fixo, rede padrão, volume e imagem. */
+/** Imagem e volume de dados como o Compose os nomeia (`name: jgents` no docker-compose.yml). */
+const IMAGE = 'jgents:local';
+const DATA_VOLUME = 'jgents_jgents-data';
+/** O mesmo no Habblaud (até a 0.3.2), só para a migração: container_name fixo, rede padrão, volume e imagem. */
 const LEGACY_DOCKER = {
   container: LEGACY_NAME,
   network: `${LEGACY_NAME}_default`,
@@ -80,7 +80,7 @@ const LEGACY_DOCKER = {
   image: `${LEGACY_NAME}:local`,
 } as const;
 
-const USAGE = tr('Uso: npm run docker:up [-- opções]\n\nOpções:\n  --no-build   sobe sem reconstruir a imagem\n  --down       derruba o container (o mesmo que npm run docker:down)\n  -h, --help   mostra esta ajuda\n\nVariáveis: HABBLAUD_PORT (porta no host, padrão {0}), HABBLAUD_CLAUDE_DIRS\n(config dirs separados por vírgula, se as contas não estiverem em ~/.claude*), HABBLAUD_CODEX_DIRS\n(pastas do Codex, se não estiverem em ~/.codex* nem em CODEX_HOME) e HABBLAUD_CODEX=0 (sem o Codex).', [DEFAULT_PORT]);
+const USAGE = tr('Uso: npm run docker:up [-- opções]\n\nOpções:\n  --no-build   sobe sem reconstruir a imagem\n  --down       derruba o container (o mesmo que npm run docker:down)\n  -h, --help   mostra esta ajuda\n\nVariáveis: JGENTS_PORT (porta no host, padrão {0}), JGENTS_CLAUDE_DIRS\n(config dirs separados por vírgula, se as contas não estiverem em ~/.claude*), JGENTS_CODEX_DIRS\n(pastas do Codex, se não estiverem em ~/.codex* nem em CODEX_HOME) e JGENTS_CODEX=0 (sem o Codex).', [DEFAULT_PORT]);
 
 // ---------------------------------------------------------------------------------------------
 // Saída no terminal
@@ -127,10 +127,10 @@ export function parseArgs(argv: string[]): Options {
 }
 
 export function hostPort(env: NodeJS.ProcessEnv): number {
-  const raw = env.HABBLAUD_PORT?.trim();
+  const raw = env.JGENTS_PORT?.trim();
   if (!raw) return DEFAULT_PORT;
   const port = Number(raw);
-  if (!Number.isInteger(port) || port <= 0 || port >= 65536) fail(tr('HABBLAUD_PORT inválida: "{0}" (use um número de 1 a 65535).', [raw]));
+  if (!Number.isInteger(port) || port <= 0 || port >= 65536) fail(tr('JGENTS_PORT inválida: "{0}" (use um número de 1 a 65535).', [raw]));
   return port;
 }
 
@@ -225,7 +225,7 @@ export function planCodexMounts(dirs: string[], accounts: DetectedAccount[], res
   return out;
 }
 
-/** Metadados das contas do Codex para HABBLAUD_ACCOUNTS: `provider: 'codex'` e a pasta do HOST em `configDir`. */
+/** Metadados das contas do Codex para JGENTS_ACCOUNTS: `provider: 'codex'` e a pasta do HOST em `configDir`. */
 export function codexAccountsPayload(mounts: AccountMount[]): AccountPayload[] {
   return mounts.map(({ account: a, hostDir, mountDir }) => {
     const p: AccountPayload = { id: a.id, provider: 'codex', configDir: hostDir, mountDir, short: a.short, name: a.name, color: a.color };
@@ -234,9 +234,9 @@ export function codexAccountsPayload(mounts: AccountMount[]): AccountPayload[] {
   });
 }
 
-/** HABBLAUD_CODEX desligado (0, false, off, no) no ambiente de quem roda o docker:up. */
+/** JGENTS_CODEX desligado (0, false, off, no) no ambiente de quem roda o docker:up. */
 export function codexDisabled(env: NodeJS.ProcessEnv): boolean {
-  const v = env.HABBLAUD_CODEX?.trim();
+  const v = env.JGENTS_CODEX?.trim();
   return !!v && !/^(1|true|yes|sim|on)$/i.test(v);
 }
 
@@ -262,7 +262,7 @@ export function sanitizeCachedUsage(raw: unknown): CachedUsage | undefined {
   return Object.keys(out.utilization).length ? out : undefined;
 }
 
-/** Metadados das contas para HABBLAUD_ACCOUNTS (o container não enxerga o .claude.json do host). */
+/** Metadados das contas para JGENTS_ACCOUNTS (o container não enxerga o .claude.json do host). */
 export function accountsPayload(mounts: AccountMount[]): AccountPayload[] {
   return mounts.map(({ account: a, mountDir }) => {
     const p: AccountPayload = { id: a.id, configDir: a.configDir, mountDir, short: a.short, name: a.name, color: a.color };
@@ -314,11 +314,11 @@ export function renderOverride(
   extraPorts: string[] = [],
 ): string {
   const env: Array<[string, string]> = [
-    ['HABBLAUD_CLAUDE_DIRS', mounts.map((m) => m.mountDir).join(',')],
-    ['HABBLAUD_ACCOUNTS', JSON.stringify([...accountsPayload(mounts), ...codexAccountsPayload(codex)])],
+    ['JGENTS_CLAUDE_DIRS', mounts.map((m) => m.mountDir).join(',')],
+    ['JGENTS_ACCOUNTS', JSON.stringify([...accountsPayload(mounts), ...codexAccountsPayload(codex)])],
   ];
-  if (codex.length) env.push(['HABBLAUD_CODEX_DIRS', codex.map((m) => m.mountDir).join(',')]);
-  if (usageDir) env.push(['HABBLAUD_USAGE_DIR', CONTAINER_USAGE_DIR]);
+  if (codex.length) env.push(['JGENTS_CODEX_DIRS', codex.map((m) => m.mountDir).join(',')]);
+  if (usageDir) env.push(['JGENTS_USAGE_DIR', CONTAINER_USAGE_DIR]);
   if (timeZone) env.push(['TZ', timeZone]);
   const lines = [
     `# Gerado por scripts/docker-up.ts em ${generatedAt.toISOString()} — não edite: é recriado a cada \`npm run docker:up\`.`,
@@ -365,20 +365,20 @@ export function modHint(mod: Pick<ModUpdateResult, 'installed' | 'unavailable'>)
 }
 
 // ---------------------------------------------------------------------------------------------
-// Nome antigo (CodeTown, até a 0.3.2): plano da subida no Docker e nomes do .env (funções puras)
+// Nome antigo (Habblaud, até a 0.11.0): plano da subida no Docker e nomes do .env (funções puras)
 // ---------------------------------------------------------------------------------------------
 
 /** O que já existe no Docker antes de subir. */
 export interface DockerState {
-  /** Container `codetown` do CodeTown (container_name fixo: prende o nome e a porta). */
+  /** Container `habblaud` do Habblaud (container_name fixo: prende o nome e a porta). */
   legacyContainer: boolean;
-  /** Rede codetown_default. */
+  /** Rede habblaud_default. */
   legacyNetwork: boolean;
-  /** Volume codetown_codetown-data (nomes dos personagens, linha do tempo, estatísticas). */
+  /** Volume habblaud_habblaud-data (nomes dos personagens, linha do tempo, estatísticas). */
   legacyVolume: boolean;
-  /** Imagem codetown:local. */
+  /** Imagem habblaud:local. */
   legacyImage: boolean;
-  /** Volume de dados do Habblaud (habblaud_habblaud-data). */
+  /** Volume de dados do JGENTS (jgents_jgents-data). */
   dataVolume: boolean;
 }
 
@@ -390,12 +390,12 @@ export type UpStep =
 
 export interface UpPlan {
   steps: UpStep[];
-  /** Comandos para apagar o que sobrou do CodeTown, mostrados no fim quando esta subida migrou algo. */
+  /** Comandos para apagar o que sobrou do Habblaud, mostrados no fim quando esta subida migrou algo. */
   cleanup: string[];
 }
 
 /**
- * Passos para subir o Habblaud. Antes, tira do caminho o container do CodeTown e a rede dele. Se o volume antigo
+ * Passos para subir o JGENTS. Antes, tira do caminho o container do Habblaud e a rede dele. Se o volume antigo
  * existe e o novo ainda não, os dados são copiados: o Compose cria o volume (com os labels dele; um volume criado
  * à mão gera aviso e pedido para recriar) e o container, ainda parado; a cópia entra e só então ele sobe. O volume
  * antigo nunca é apagado aqui.
@@ -423,7 +423,7 @@ export function planUp(state: DockerState, build: boolean): UpPlan {
 
 /**
  * `docker run` descartável que copia o volume `from` (somente leitura) para `to` com a própria imagem do
- * Habblaud, como root (ela roda como `node`) e sem rede; a raiz de `to` fica com o dono e as permissões da de
+ * JGENTS, como root (ela roda como `node`) e sem rede; a raiz de `to` fica com o dono e as permissões da de
  * `from`. O --rm leva junto o volume anônimo do VOLUME /data da imagem.
  */
 export function copyVolumeArgs(from: string, to: string, image: string = IMAGE): string[] {
@@ -443,10 +443,10 @@ export function envFileKeys(text: string): string[] {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Estado no host (~/.habblaud)
+// Estado no host (~/.jgents)
 // ---------------------------------------------------------------------------------------------
 
-/** Avisa das variáveis CODETOWN_* (nome antigo, ignoradas) no ambiente e no .env desta pasta. */
+/** Avisa das variáveis HABBLAUD_* (nome antigo, ignoradas) no ambiente e no .env desta pasta. */
 function warnLegacyEnv(): void {
   let fileKeys: string[] = [];
   try {
@@ -459,7 +459,7 @@ function warnLegacyEnv(): void {
   }
 }
 
-/** Leva ~/.codetown (nome antigo) para ~/.habblaud; roda antes de criar a pasta do uso, para ser um rename. */
+/** Leva ~/.habblaud (nome antigo) para ~/.jgents; roda antes de criar a pasta do uso, para ser um rename. */
 function migrateStateDir(): void {
   const result = migrateLegacyStateDir(HOME);
   const msg = describeStateMigration(result);
@@ -494,8 +494,8 @@ function checkDocker(): void {
 }
 
 function compose(args: string[], port: number): void {
-  // HABBLAUD_PORT explícito: vale sobre um eventual .env na pasta do projeto.
-  const res = spawnSync('docker', ['compose', ...args], { cwd: ROOT, stdio: 'inherit', env: { ...process.env, HABBLAUD_PORT: String(port) } });
+  // JGENTS_PORT explícito: vale sobre um eventual .env na pasta do projeto.
+  const res = spawnSync('docker', ['compose', ...args], { cwd: ROOT, stdio: 'inherit', env: { ...process.env, JGENTS_PORT: String(port) } });
   if (res.error) fail(tr('não consegui rodar "docker compose {0}": {1}', [args.join(' '), res.error.message]));
   if (res.status !== 0) fail(tr('"docker compose {0}" falhou (código {1}).', [args.join(' '), res.status ?? res.signal]));
 }
@@ -509,15 +509,15 @@ function dockerQuiet(args: string[]): { ok: boolean; out: string; error: string 
   return { ok: res.status === 0, out: res.stdout ?? '', error };
 }
 
-/** O que já existe no Docker do CodeTown e do Habblaud (entrada de planUp). */
+/** O que já existe no Docker do Habblaud e do JGENTS (entrada de planUp). */
 function inspectDocker(): DockerState {
   const exists = (kind: 'network' | 'volume' | 'image', name: string) => dockerQuiet([kind, 'inspect', name]).ok;
-  // Só sai o container `codetown` que é mesmo do CodeTown: da imagem antiga ou do projeto antigo do Compose.
+  // Só sai o container `habblaud` que é mesmo do Habblaud: da imagem antiga ou do projeto antigo do Compose.
   const { container, image } = LEGACY_DOCKER;
   const c = dockerQuiet(['container', 'inspect', '--format', '{{.Config.Image}} {{index .Config.Labels "com.docker.compose.project"}}', container]);
   const [cImage = '', cProject = ''] = c.out.trim().split(' ');
   const legacyContainer = c.ok && (cImage === image || cProject === LEGACY_NAME);
-  if (c.ok && !legacyContainer) warn(tr('existe um container {0} que não é do CodeTown (imagem {1}); ele fica como está.', [container, cImage || '?']));
+  if (c.ok && !legacyContainer) warn(tr('existe um container {0} que não é do Habblaud (imagem {1}); ele fica como está.', [container, cImage || '?']));
   return {
     legacyContainer,
     legacyNetwork: exists('network', LEGACY_DOCKER.network),
@@ -527,18 +527,18 @@ function inspectDocker(): DockerState {
   };
 }
 
-/** Copia os dados do volume do CodeTown para o do Habblaud. Falha é só um aviso: o escritório sobe sem eles. */
+/** Copia os dados do volume do Habblaud para o do JGENTS. Falha é só um aviso: o escritório sobe sem eles. */
 function copyVolume(from: string, to: string): boolean {
   // O volume novo tem de vir do Compose: o `docker run -v` criaria um sem os labels dele.
   if (!dockerQuiet(['volume', 'inspect', to]).ok) {
-    warn(tr('o Compose não criou o volume {0}; os dados do CodeTown não foram copiados e continuam em {1}.', [to, from]));
+    warn(tr('o Compose não criou o volume {0}; os dados do Habblaud não foram copiados e continuam em {1}.', [to, from]));
     return false;
   }
-  say(tr('Copiando os dados do CodeTown (nomes dos personagens, linha do tempo e estatísticas) de {0} para {1}…', [from, to]));
+  say(tr('Copiando os dados do Habblaud (nomes dos personagens, linha do tempo e estatísticas) de {0} para {1}…', [from, to]));
   const res = dockerQuiet(copyVolumeArgs(from, to));
   if (!res.ok) {
     warn(
-      tr('não consegui copiar os dados do CodeTown ({0}). O escritório sobe sem eles; os dados continuam em {1}.\n', [res.error, from]) +
+      tr('não consegui copiar os dados do Habblaud ({0}). O escritório sobe sem eles; os dados continuam em {1}.\n', [res.error, from]) +
         tr('  Para tentar de novo: npm run docker:down && docker volume rm {0} && npm run docker:up', [to]),
     );
     return false;
@@ -554,7 +554,7 @@ function runPlan(plan: UpPlan, port: number, build: boolean): { copyFailed: bool
   for (const step of plan.steps) {
     switch (step.kind) {
       case 'remove-container': {
-        say(tr('Removendo o container {0} (CodeTown, o nome antigo)…', [step.name]));
+        say(tr('Removendo o container {0} (Habblaud, o nome antigo)…', [step.name]));
         const res = dockerQuiet(['rm', '-f', step.name]);
         if (!res.ok) fail(tr('não consegui remover o container antigo {0} ({1}). Remova com docker rm -f {2} e rode de novo.', [step.name, res.error, step.name]));
         break;
@@ -569,7 +569,7 @@ function runPlan(plan: UpPlan, port: number, build: boolean): { copyFailed: bool
         break;
       case 'compose':
         if (step.args.includes('--no-start')) {
-          say(tr('{0} o container, ainda parado, para receber os dados do CodeTown…', [build ? tr('Construindo a imagem e criando') : tr('Criando')]));
+          say(tr('{0} o container, ainda parado, para receber os dados do Habblaud…', [build ? tr('Construindo a imagem e criando') : tr('Criando')]));
           created = true;
         } else if (created) say(tr('Subindo o container…'));
         else say(build ? tr('Construindo a imagem e subindo o container…') : tr('Subindo o container (sem reconstruir a imagem)…'));
@@ -620,7 +620,7 @@ function down(port: number): void {
   checkDocker();
   say(tr('Derrubando o container…'));
   compose(['down'], port);
-  say(tr('Pronto. Os nomes dos personagens continuam guardados no volume habblaud-data.'));
+  say(tr('Pronto. Os nomes dos personagens continuam guardados no volume jgents-data.'));
 }
 
 async function up(opts: Options, port: number): Promise<void> {
@@ -629,12 +629,12 @@ async function up(opts: Options, port: number): Promise<void> {
   const baseUrl = `http://127.0.0.1:${port}`;
   const publicUrl = `http://localhost:${port}`;
 
-  // Porta ocupada por um Habblaud fora do Docker (npm run dev / npm start)?
+  // Porta ocupada por um JGENTS fora do Docker (npm run dev / npm start)?
   const existing = await fetchHealth(baseUrl, 1_500);
   if (existing && !existing.docker) {
     fail(
-      tr('já existe um Habblaud rodando fora do Docker em {0} (npm run dev ou npm start?).\n', [publicUrl]) +
-        tr(`Pare-o antes, ou use outra porta: HABBLAUD_PORT=4848 npm run docker:up`),
+      tr('já existe um JGENTS rodando fora do Docker em {0} (npm run dev ou npm start?).\n', [publicUrl]) +
+        tr(`Pare-o antes, ou use outra porta: JGENTS_PORT=4848 npm run docker:up`),
     );
   }
 
@@ -645,7 +645,7 @@ async function up(opts: Options, port: number): Promise<void> {
     warn(
       tr('nenhuma pasta do Claude Code (com projects/ ou sessions/) foi encontrada em ~/.claude*.\n') +
         tr('  O escritório vai abrir vazio (dá para ligar o modo demonstração na interface).\n') +
-        tr('  Se as contas estiverem em outro lugar: HABBLAUD_CLAUDE_DIRS=/caminho/conta1,/caminho/conta2 npm run docker:up'),
+        tr('  Se as contas estiverem em outro lugar: JGENTS_CLAUDE_DIRS=/caminho/conta1,/caminho/conta2 npm run docker:up'),
     );
   }
   for (const m of mounts) {
@@ -688,12 +688,12 @@ async function up(opts: Options, port: number): Promise<void> {
   const plan = planUp(inspectDocker(), opts.build);
   const { copyFailed } = runPlan(plan, port, opts.build);
 
-  say(tr('Aguardando o Habblaud responder em {0}…', [publicUrl]));
+  say(tr('Aguardando o JGENTS responder em {0}…', [publicUrl]));
   const health = await waitHealthy(baseUrl);
-  if (!health) fail(tr('o Habblaud não respondeu em {0} s. Veja o que aconteceu com: npm run docker:logs', [HEALTH_TIMEOUT_MS / 1000]));
+  if (!health) fail(tr('o JGENTS não respondeu em {0} s. Veja o que aconteceu com: npm run docker:logs', [HEALTH_TIMEOUT_MS / 1000]));
 
   console.log('');
-  say(tr('Habblaud{0} no ar: {1}', [health.version ? ` ${health.version}` : '', publicUrl]));
+  say(tr('JGENTS{0} no ar: {1}', [health.version ? ` ${health.version}` : '', publicUrl]));
   for (const acc of accounts) {
     const src = health.sources?.find((s) => s.label === acc.id);
     if (!src) continue;
@@ -710,7 +710,7 @@ async function up(opts: Options, port: number): Promise<void> {
   }
   for (const line of modHint(updateMods(dirs, accounts))) say(line);
   // Com a cópia falha, os dados só existem no volume antigo: nada de sugerir apagá-lo.
-  if (plan.cleanup.length && !copyFailed) say(tr('  Sobrou do CodeTown; depois de conferir o escritório, apague com: {0}', [plan.cleanup.join(' · ')]));
+  if (plan.cleanup.length && !copyFailed) say(tr('  Sobrou do Habblaud; depois de conferir o escritório, apague com: {0}', [plan.cleanup.join(' · ')]));
   say(tr('  Logs: npm run docker:logs · Parar: npm run docker:down'));
 }
 
@@ -725,14 +725,14 @@ function prepareRemoteTls(): string | undefined {
   } catch {
     return undefined;
   }
-  if (!readEnvValue(env, 'HABBLAUD_REMOTE_USER')) return undefined;
+  if (!readEnvValue(env, 'JGENTS_REMOTE_USER')) return undefined;
   const paths = tlsPaths(remoteTlsBase(HOME));
   if (!statOk(paths.caCert)) {
     warn(tr('acesso remoto configurado, mas sem a CA local: rode npm run remote:setup.'));
     return undefined;
   }
   try {
-    const targets = remoteTargets({ name: readEnvValue(env, 'HABBLAUD_REMOTE_NAME'), domain: readEnvValue(env, 'HABBLAUD_REMOTE_DOMAIN') });
+    const targets = remoteTargets({ name: readEnvValue(env, 'JGENTS_REMOTE_NAME'), domain: readEnvValue(env, 'JGENTS_REMOTE_DOMAIN') });
     const r = ensureServerCert(paths, targets);
     if (r.issued) say(tr('Acesso remoto: certificado do servidor renovado ({0}).', [r.reason]));
     say(tr('Acesso remoto: monta {0} em {1}, somente leitura.', [tildify(paths.serverDir), CONTAINER_REMOTE_TLS_DIR]));
@@ -744,19 +744,19 @@ function prepareRemoteTls(): string | undefined {
 }
 
 /**
- * Portas do acesso pelo celular, só com ele configurado (HABBLAUD_REMOTE_USER no .env): a remota (HABBLAUD_REMOTE_PORT,
- * padrão 4748) e, se houver, HABBLAUD_REMOTE_HTTP_PORT (o setup grava 80 quando a remota é a 443), que cai na mesma
+ * Portas do acesso pelo celular, só com ele configurado (JGENTS_REMOTE_USER no .env): a remota (JGENTS_REMOTE_PORT,
+ * padrão 4748) e, se houver, JGENTS_REMOTE_HTTP_PORT (o setup grava 80 quando a remota é a 443), que cai na mesma
  * porta do container e responde HTTP com 308 para https:// — quem digita só "meuclaude.local" cai no HTTPS. Sem o
  * setup, nada é publicado além da 4747.
  */
 export function remotePortsFrom(env: string): string[] {
-  if (!readEnvValue(env, 'HABBLAUD_REMOTE_USER')) return [];
-  const bind = readEnvValue(env, 'HABBLAUD_REMOTE_BIND') || '127.0.0.1';
+  if (!readEnvValue(env, 'JGENTS_REMOTE_USER')) return [];
+  const bind = readEnvValue(env, 'JGENTS_REMOTE_BIND') || '127.0.0.1';
   const valid = (n: number) => Number.isInteger(n) && n > 0 && n < 65536;
-  const raw = readEnvValue(env, 'HABBLAUD_REMOTE_PORT');
+  const raw = readEnvValue(env, 'JGENTS_REMOTE_PORT');
   const port = raw ? Number(raw) : 4748;
   const out = valid(port) ? [`${bind}:${port}:4748`] : [];
-  const http = Number(readEnvValue(env, 'HABBLAUD_REMOTE_HTTP_PORT'));
+  const http = Number(readEnvValue(env, 'JGENTS_REMOTE_HTTP_PORT'));
   if (valid(http) && http !== port) out.push(`${bind}:${http}:4748`);
   return out;
 }
@@ -764,7 +764,7 @@ export function remotePortsFrom(env: string): string[] {
 function remoteInsecure(): boolean {
   try {
     const env = readFileSync(ENV_FILE, 'utf8');
-    return !!readEnvValue(env, 'HABBLAUD_REMOTE_USER') && /^(1|true|yes|sim|on)$/i.test(readEnvValue(env, 'HABBLAUD_REMOTE_INSECURE_HTTP') ?? '');
+    return !!readEnvValue(env, 'JGENTS_REMOTE_USER') && /^(1|true|yes|sim|on)$/i.test(readEnvValue(env, 'JGENTS_REMOTE_INSECURE_HTTP') ?? '');
   } catch {
     return false;
   }
@@ -800,7 +800,7 @@ function updateMods(dirs: string[], accounts: DetectedAccount[]): Pick<ModUpdate
     }
     return mod;
   } catch (err) {
-    warn(tr('não consegui conferir o mod do Habblaud ({0}).', [(err as Error).message]));
+    warn(tr('não consegui conferir o mod do JGENTS ({0}).', [(err as Error).message]));
     return { installed: false, unavailable: true };
   }
 }

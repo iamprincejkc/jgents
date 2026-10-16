@@ -4,7 +4,7 @@
 //
 // Escolha do idioma (uma vez, ao carregar este módulo):
 // - navegador: preferência salva (Configurações > Idioma), senão os idiomas do navegador, senão o inglês;
-// - servidor: HABBLAUD_LANG, senão o idioma do sistema (LC_ALL / LC_MESSAGES / LANG / Intl), senão o inglês (ver
+// - servidor: JGENTS_LANG, senão o idioma do sistema (LC_ALL / LC_MESSAGES / LANG / Intl), senão o inglês (ver
 //   serverLocale).
 // Os textos de atividade são montados pelo servidor, então seguem o idioma do servidor.
 import { DICTIONARIES } from './locales/all';
@@ -20,7 +20,7 @@ export const LOCALES: { id: Locale; name: string }[] = [
 ];
 
 /** Chave da preferência salva no navegador. */
-export const LOCALE_STORAGE_KEY = 'habblaud:locale';
+export const LOCALE_STORAGE_KEY = 'jgents:locale';
 
 /** Dicionários disponíveis (o PT não tem: é a língua de origem). No navegador começa vazio: ver registerDictionary. */
 const DICTS: Partial<Record<Locale, Readonly<Record<string, string>>>> = { ...DICTIONARIES };
@@ -42,12 +42,12 @@ export function normalizeLocale(v: string | null | undefined): Locale | undefine
 }
 
 /**
- * Idioma do servidor (atividades, avisos, logs). HABBLAUD_LANG vale para qualquer idioma; sem ele, o do sistema
+ * Idioma do servidor (atividades, avisos, logs). JGENTS_LANG vale para qualquer idioma; sem ele, o do sistema
  * (LC_ALL, LC_MESSAGES, LANG e, por último, o Intl); sem nenhum suportado, o inglês. (No original, o inglês do sistema
  * não contava e o padrão era o português; nesta cópia o padrão é o inglês.)
  */
 export function serverLocale(env: Record<string, string | undefined>, intl?: string): Locale {
-  const own = normalizeLocale(env.HABBLAUD_LANG);
+  const own = normalizeLocale(env.JGENTS_LANG);
   if (own) return own;
   for (const v of [env.LC_ALL, env.LC_MESSAGES, env.LANG, intl]) {
     const n = normalizeLocale(v);
@@ -78,7 +78,7 @@ function detect(): Locale {
   }
   const env = g.process?.env ?? {};
   // Os testes comparam textos em PT: ficam em PT mesmo numa máquina em outro idioma.
-  if (env.VITEST) return normalizeLocale(env.HABBLAUD_LANG_TEST) ?? 'pt-BR';
+  if (env.VITEST) return normalizeLocale(env.JGENTS_LANG_TEST) ?? 'pt-BR';
   let intl: string | undefined;
   try {
     intl = Intl.DateTimeFormat().resolvedOptions().locale;

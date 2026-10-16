@@ -1,0 +1,4 @@
+{
+  "description": "Hooks module of the JGENTS mod (plan usage, the notice under the prompt and /jgents)",
+  "modules": ["./register.ts"]
+}

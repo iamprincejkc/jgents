@@ -43,9 +43,9 @@ describe('i18n', () => {
     expect(tr('{0} e {1}', ['um'])).toBe('um e {1}');
   });
 
-  it('servidor: HABBLAUD_LANG vale para qualquer idioma; sem ele, o do sistema; sem nenhum suportado, o inglês', () => {
-    expect(serverLocale({ HABBLAUD_LANG: 'en' }, 'pt-BR')).toBe('en');
-    expect(serverLocale({ HABBLAUD_LANG: 'es-MX', LANG: 'fr_FR.UTF-8' })).toBe('es');
+  it('servidor: JGENTS_LANG vale para qualquer idioma; sem ele, o do sistema; sem nenhum suportado, o inglês', () => {
+    expect(serverLocale({ JGENTS_LANG: 'en' }, 'pt-BR')).toBe('en');
+    expect(serverLocale({ JGENTS_LANG: 'es-MX', LANG: 'fr_FR.UTF-8' })).toBe('es');
     // O inglês do sistema conta (Windows en-US, Mac com LANG em inglês, container sem LANG).
     expect(serverLocale({ LANG: 'en_US.UTF-8' }, 'pt-BR')).toBe('en');
     expect(serverLocale({}, 'en-US')).toBe('en');

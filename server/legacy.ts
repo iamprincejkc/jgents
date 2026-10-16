@@ -1,19 +1,21 @@
-// Migração do nome antigo do projeto (CodeTown, até a 0.3.2) para Habblaud. O que ainda precisa conhecer o
-// nome antigo fica aqui, para sair de uma vez quando ninguém mais vier de uma instalação da 0.3.
+// Migração do nome antigo do projeto (Habblaud, até a 0.11.0) para JGENTS. O que ainda precisa conhecer o
+// nome antigo fica aqui, para sair de uma vez quando ninguém mais vier de uma instalação do Habblaud.
 import { existsSync, readdirSync, renameSync, rmdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tr } from '../shared/i18n';
 
 /** Nome antigo em minúsculas: pasta de estado, plugins, marketplace, projeto e volume do Docker. */
-export const LEGACY_NAME = 'codetown';
-const LEGACY_ENV_PREFIX = 'CODETOWN_';
-const ENV_PREFIX = 'HABBLAUD_';
+export const LEGACY_NAME = 'habblaud';
+const LEGACY_ENV_PREFIX = 'HABBLAUD_';
+const ENV_PREFIX = 'JGENTS_';
+/** Variáveis que mudaram mais que o prefixo na troca de nome (o resto do nome passou para o inglês). */
+const RENAMED_ENV: Readonly<Record<string, string>> = { HABBLAUD_MENSAGENS: 'JGENTS_MESSAGES' };
 
-/** Variáveis do nome antigo (CODETOWN_*) presentes em `keys`, com o nome novo de cada uma. */
+/** Variáveis do nome antigo (HABBLAUD_*) presentes em `keys`, com o nome novo de cada uma. */
 export function legacyEnvVars(keys: Iterable<string>): Array<{ from: string; to: string }> {
   const out: Array<{ from: string; to: string }> = [];
   for (const k of keys) {
-    if (k.startsWith(LEGACY_ENV_PREFIX)) out.push({ from: k, to: ENV_PREFIX + k.slice(LEGACY_ENV_PREFIX.length) });
+    if (k.startsWith(LEGACY_ENV_PREFIX)) out.push({ from: k, to: RENAMED_ENV[k] ?? ENV_PREFIX + k.slice(LEGACY_ENV_PREFIX.length) });
   }
   return out.sort((a, b) => a.from.localeCompare(b.from));
 }
@@ -51,7 +53,7 @@ function mergeInto(from: string, to: string, moved: string[], rel: string): void
       moved.push(relName);
     } else if (isDir(src) && isDir(dst)) mergeInto(src, dst, moved, relName);
     else if (isFile(src) && isFile(dst) && statSync(src).mtimeMs > statSync(dst).mtimeMs) {
-      // Ex.: o mod antigo seguiu gravando o uso em ~/.codetown depois de a pasta nova existir.
+      // Ex.: o mod antigo seguiu gravando o uso em ~/.habblaud depois de a pasta nova existir.
       renameSync(src, dst);
       moved.push(relName);
     }
@@ -64,13 +66,13 @@ function mergeInto(from: string, to: string, moved: string[], rel: string): void
 }
 
 /**
- * Leva o estado de ~/.codetown para ~/.habblaud (uso capturado pelo mod/tap e, fora do Docker, nomes, linha do
+ * Leva o estado de ~/.habblaud para ~/.jgents (uso capturado pelo mod/tap e, fora do Docker, nomes, linha do
  * tempo e estatísticas). Sem a pasta nova, é um rename; se ela já existe (o mod gravou o uso antes), move o que
  * falta lá e o que for mais recente. Devolve o que foi movido (vazio = nada a fazer) e nunca lança.
  */
 export function migrateLegacyStateDir(home: string): { moved: string[]; error?: string } {
   const from = join(home, `.${LEGACY_NAME}`);
-  const to = join(home, '.habblaud');
+  const to = join(home, '.jgents');
   const moved: string[] = [];
   if (!isDir(from)) return { moved };
   try {
@@ -87,7 +89,7 @@ export function migrateLegacyStateDir(home: string): { moved: string[]; error?: 
 
 /** Frase curta para o log de quem migrou (undefined se nada mudou). */
 export function describeStateMigration(r: { moved: string[]; error?: string }): string | undefined {
-  if (r.error) return tr('não consegui levar ~/.{0} para ~/.habblaud ({1}); mova a pasta à mão.', [LEGACY_NAME, r.error]);
+  if (r.error) return tr('não consegui levar ~/.{0} para ~/.jgents ({1}); mova a pasta à mão.', [LEGACY_NAME, r.error]);
   if (!r.moved.length) return undefined;
-  return r.moved[0] === '.' ? tr('~/.{0} (nome antigo) agora é ~/.habblaud.', [LEGACY_NAME]) : tr('de ~/.{0} (nome antigo) para ~/.habblaud: {1}.', [LEGACY_NAME, r.moved.join(', ')]);
+  return r.moved[0] === '.' ? tr('~/.{0} (nome antigo) agora é ~/.jgents.', [LEGACY_NAME]) : tr('de ~/.{0} (nome antigo) para ~/.jgents: {1}.', [LEGACY_NAME, r.moved.join(', ')]);
 }

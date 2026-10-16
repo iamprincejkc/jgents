@@ -60,7 +60,7 @@ async function serve(enabled = true): Promise<{ base: string; port: number; offi
   registry?.start();
   const accounts = new AccountsService({ dirs: [], home: tmp.dir, env: {}, onChange: () => {} });
   const api = createApiHandler({ office, hub, accounts, sources: () => [], version: 't', inDocker: true, terminal: true, messages: registry ? createMessageRoutes(registry) : undefined });
-  const guard = createRequestGuard({ allowedHosts: new Set(['habblaud.lan']) });
+  const guard = createRequestGuard({ allowedHosts: new Set(['jgents.lan']) });
   const server = http.createServer((req, res) => {
     if (guard(req, res)) return;
     if (!api(req, res, new URL(req.url ?? '/', 'http://x'))) res.writeHead(404).end();
@@ -84,7 +84,7 @@ describe('rotas do auxiliar do Codex', () => {
     expect((await request(s.base, '/api/codex/bridge/poll', { method: 'POST', body: {} })).status).toBe(403);
     await close!();
     s = await serve();
-    expect((await request(s.base, '/api/codex/bridge/poll', { method: 'POST', headers: { Host: 'habblaud.lan' }, body: {} })).status).toBe(403);
+    expect((await request(s.base, '/api/codex/bridge/poll', { method: 'POST', headers: { Host: 'jgents.lan' }, body: {} })).status).toBe(403);
     expect((await request(s.base, '/api/codex/bridge/ack')).status).toBe(405);
     expect((await request(s.base, '/api/codex/bridge/poll', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{}' })).status).toBe(415);
     expect((await request(s.base, '/api/codex/bridge/ack', { method: 'POST', body: { results: 'x' } })).status).toBe(400);
@@ -112,7 +112,7 @@ describe('rotas do auxiliar do Codex', () => {
     expect(lines.join('\n')).not.toContain('o resto');
   });
 
-  it('Habblaud fora do ar ou recusando: a rodada só informa (nada roda)', async () => {
+  it('JGENTS fora do ar ou recusando: a rodada só informa (nada roda)', async () => {
     const run = async () => ({ ok: true as const });
     expect(await round(httpPost(1), run)).toEqual({ state: 'down' });
     const s = await serve(false);
@@ -160,7 +160,7 @@ describe('rotas do auxiliar do Codex', () => {
   it('parseArgs', () => {
     expect(parseArgs([], {})).toEqual({ port: 4747, once: false });
     expect(parseArgs(['--port', '4851', '--once'], {})).toEqual({ port: 4851, once: true });
-    expect(parseArgs([], { HABBLAUD_PORT: '4848' })).toEqual({ port: 4848, once: false });
+    expect(parseArgs([], { JGENTS_PORT: '4848' })).toEqual({ port: 4848, once: false });
     expect(parseArgs(['-h'], {})).toBe('help');
     expect(() => parseArgs(['--port', 'x'], {})).toThrow(/--port/);
     expect(() => parseArgs(['--xyz'], {})).toThrow(/desconhecida/);
@@ -182,7 +182,7 @@ describe('spawnRound com anexos e dictationRound', () => {
       files.map((f) => (wrote.push(`${id}:${f.name}:${f.data.toString()}`), `/h/att/${f.name}`)),
     );
     expect(wrote).toEqual(['a:print.png:png']);
-    expect(new URL(opened[0]).searchParams.get('q')).toBe('veja\n\nAnexo enviado pelo Habblaud (leia antes de começar):\n- /h/att/print.png');
+    expect(new URL(opened[0]).searchParams.get('q')).toBe('veja\n\nAnexo enviado pelo JGENTS (leia antes de começar):\n- /h/att/print.png');
     expect(r).toEqual({ state: 'ok', results: [{ id: 'a', ok: true, how: 'app' }, { id: 'b', ok: false, error: 'anexo ilegível' }] });
   });
 
@@ -275,7 +275,7 @@ describe('spawnRound (agentes novos pelo auxiliar)', () => {
     expect(calls[1]).toEqual(['/api/host/spawn/ack', { results: r.state === 'ok' ? r.results : [] }]);
   });
 
-  it('Habblaud fora do ar ou recusando', async () => {
+  it('JGENTS fora do ar ou recusando', async () => {
     expect(await spawnRound(async () => null, async () => ({ ok: true }))).toEqual({ state: 'down' });
     expect(await spawnRound(async () => ({ status: 403, json: { error: 'x' } }), async () => ({ ok: true }))).toEqual({ state: 'refused', status: 403 });
   });

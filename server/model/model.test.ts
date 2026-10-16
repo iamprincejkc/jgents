@@ -44,10 +44,10 @@ describe('salas', () => {
       new Map([
         ['1', '/p/empresa/applications/app'],
         ['2', '/p/outro/app'],
-        ['3', '/p/habblaud'],
+        ['3', '/p/jgents'],
       ]),
     );
-    expect([...names.values()]).toEqual(['applications/app', 'outro/app', 'habblaud']);
+    expect([...names.values()]).toEqual(['applications/app', 'outro/app', 'jgents']);
   });
 });
 
@@ -620,7 +620,7 @@ describe('Office: personagem do projeto', () => {
     expect(names.get('s2')).toBeUndefined();
   });
 
-  describe('reinício do Habblaud (names.json em arquivo)', () => {
+  describe('reinício do JGENTS (names.json em arquivo)', () => {
     /** Grava o names.json e sobe um NameStore e um Office novos lendo o mesmo arquivo. */
     const restart = (before: NameStore, file: string) => {
       before.flush();

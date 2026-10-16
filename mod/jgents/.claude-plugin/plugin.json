@@ -1,0 +1,11 @@
+{
+  "name": "jgents",
+  "displayName": "JGENTS",
+  "version": "0.11.0",
+  "description": "Connects the session to JGENTS: records plan usage (5-hour and weekly) for the office, shows a notice under the prompt when another session needs you and adds the /jgents command.",
+  "author": { "name": "JKC", "url": "https://github.com/iamprincejkc" },
+  "homepage": "https://github.com/iamprincejkc/jgents#readme",
+  "repository": "https://github.com/iamprincejkc/jgents",
+  "license": "MIT",
+  "keywords": ["jgents", "office", "usage", "rate-limits", "status"]
+}
