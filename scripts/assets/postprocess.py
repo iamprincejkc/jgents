@@ -1,4 +1,4 @@
-"""Pós-processamento e composição dos assets do Habblaud (pixel art a partir das imagens da IA).
+"""Pós-processamento e composição dos assets do JGENTS (pixel art a partir das imagens da IA).
 
 Uso (a partir da raiz do projeto; requer Pillow e numpy):
     python3 -E scripts/assets/postprocess.py                  # gera tudo + manifest + folha de contato
@@ -144,41 +144,30 @@ def framed(img: Image.Image, style: str) -> Image.Image:
 
 
 # ---------------------------------------------------------------------------
-# marca: mark desenhado, favicons, ícones com céu de entardecer
+# marca: mark desenhado (tile do JGENTS), favicons, ícones do app e o .ico do Windows
 
 
-DUSK = ["#1f2445", "#262a55", "#30316a", "#433a7a", "#5d4585", "#7d4f8a", "#a45a88", "#cf6c7d", "#ee8c6c", "#f8b26a"]
+def tile_icon(mark: Image.Image, size: int, background: str | None = None) -> Image.Image:
+    """Ícone quadrado: o mark ampliado pelo maior fator inteiro que cabe (NEAREST), centralizado.
+
+    O mark já é um tile com fundo próprio; `background` só preenche a sobra (ícones que não aceitam alfa)."""
+    factor = size // mark.width
+    big = px.upscale(mark, factor)
+    canvas = Image.new("RGBA", (size, size), px.hex_rgb(background) + (255,) if background else (0, 0, 0, 0))
+    canvas.alpha_composite(big, ((size - big.width) // 2, (size - big.height) // 2))
+    return canvas
 
 
-def dusk_scene(w: int, h: int, horizon: int, seed: int = 3) -> Image.Image:
-    """Céu de entardecer em faixas (sem gradiente), estrelas no alto e calçada abaixo do horizonte."""
-    img = Image.new("RGBA", (w, h))
-    draw = ImageDraw.Draw(img)
-    # faixas mais finas perto do horizonte
-    weights = np.linspace(1.6, 0.6, len(DUSK))
-    bounds = np.concatenate([[0], np.cumsum(weights / weights.sum() * horizon)]).round().astype(int)
-    for i, color in enumerate(DUSK):
-        draw.rectangle((0, bounds[i], w - 1, bounds[i + 1] - 1), fill=color)
-    rng = np.random.default_rng(seed)
-    for _ in range(max(3, w * horizon // 260)):
-        x, y = int(rng.integers(1, w - 1)), int(rng.integers(1, max(2, bounds[3])))
-        draw.point((x, y), fill="#fef3d6")
-    draw.rectangle((0, horizon, w - 1, h - 1), fill="#2b3245")
-    draw.line((0, horizon, w - 1, horizon), fill="#4a5470")
-    return img
+def windows_icon(mark32: Image.Image, mark16: Image.Image, path: Path) -> None:
+    """jgents.ico para os atalhos do Windows: cada tamanho é o mark desenhado ampliado por inteiro (nítido).
+    O de 24 px (barra de tarefas a 100%) é o de 16 com margem: ampliar 1,5x borraria o pixel art."""
+    pad24 = Image.new("RGBA", (24, 24), (0, 0, 0, 0))
+    pad24.alpha_composite(mark16, (4, 4))
+    frames = [mark16, pad24, mark32, px.upscale(mark16, 3), px.upscale(mark32, 2), px.upscale(mark32, 8)]
+    frames[-1].save(path, format="ICO", sizes=[(f.width, f.height) for f in frames], append_images=frames[:-1])
 
 
-def app_icon(mark: Image.Image, canvas: int, factor: int, ground_gap: int) -> Image.Image:
-    """Ícone quadrado: céu + calçada + prédio apoiado na calçada, ampliado por inteiro com NEAREST."""
-    horizon = canvas - ground_gap - 2
-    scene = dusk_scene(canvas, canvas, horizon)
-    x = (canvas - mark.width) // 2
-    y = canvas - ground_gap - mark.height
-    scene.alpha_composite(mark, (x, y))
-    return px.upscale(scene, factor)
-
-
-def build_brand(detailed: Image.Image | None, out_root: Path) -> dict:
+def build_brand(out_root: Path) -> dict:
     brand = out_root / "brand"
     brand.mkdir(parents=True, exist_ok=True)
     mark32, mark16 = art.mark(32), art.mark(16)
@@ -189,9 +178,11 @@ def build_brand(detailed: Image.Image | None, out_root: Path) -> dict:
     mark32.save(brand / "favicon-32.png")
     sign.save(brand / "signage.png")
     px.upscale(sign, 4).save(brand / "signage@4x.png")
-    app_icon(mark32, 45, 4, 4).save(brand / "apple-touch-icon.png")
-    app_icon(mark32, 48, 4, 4).save(brand / "icon-192.png")
-    section: dict = {
+    tile_icon(mark32, 180, "#12151d").save(brand / "apple-touch-icon.png")
+    tile_icon(mark32, 192).save(brand / "icon-192.png")
+    tile_icon(mark32, 512).save(brand / "icon-512.png")
+    windows_icon(mark32, mark16, brand / "jgents.ico")
+    return {
         "mark": {"file": "brand/logo-mark.png", "w": 32, "h": 32},
         "markLarge": {"file": "brand/logo-mark@4x.png", "w": 128, "h": 128},
         "signage": {"file": "brand/signage.png", "w": sign.width, "h": sign.height},
@@ -201,21 +192,16 @@ def build_brand(detailed: Image.Image | None, out_root: Path) -> dict:
         "appleTouch": "brand/apple-touch-icon.png",
         "icon192": "brand/icon-192.png",
         "icon512": "brand/icon-512.png",
+        "windowsIcon": "brand/jgents.ico",
     }
-    if detailed is not None:
-        app_icon(detailed, 128, 4, 10).save(brand / "icon-512.png")
-        section["markDetailed"] = {"file": "brand/logo-detailed.png", "w": detailed.width, "h": detailed.height}
-    else:
-        app_icon(mark32, 128, 4, 16).save(brand / "icon-512.png")
-    return section
 
 
 # ---------------------------------------------------------------------------
 # og-image (1200x630 = 600x315 nativo x2)
 
 
-def build_og(detailed: Image.Image | None, illustration: Image.Image | None, out_root: Path) -> str:
-    """Card de compartilhamento: ilustração no alto, painel com o prédio, "Habblaud" e a frase."""
+def build_og(illustration: Image.Image | None, out_root: Path) -> str:
+    """Card de compartilhamento: ilustração no alto, painel com o mark, "JGENTS" e a frase."""
     w, h = 600, 315
     # fundo = azul-marinho do canto da ilustração, para a emenda com ela não aparecer
     night = illustration.convert("RGBA").getpixel((0, 0)) if illustration is not None else px.hex_rgb(NIGHT) + (255,)
@@ -234,13 +220,13 @@ def build_og(detailed: Image.Image | None, illustration: Image.Image | None, out
     draw.rectangle((0, panel_top, w - 1, h - 1), fill="#12151d")
     draw.line((0, panel_top, w - 1, panel_top), fill="#fac665")
     draw.line((0, panel_top + 1, w - 1, panel_top + 1), fill="#2a3656")
-    mark = detailed if detailed is not None else px.upscale(art.mark(32), 2)
+    mark = px.upscale(art.mark(32), 2)
     mx = 28
-    og.alpha_composite(mark, (mx, h - 12 - mark.height))
+    og.alpha_composite(mark, (mx, h - 18 - mark.height))
     tx, ty = mx + mark.width + 20, panel_top + 12
-    og.alpha_composite(art.text_image("Hab", "#f4f1ea", 4, shadow="#05070c"), (tx, ty))
-    og.alpha_composite(art.text_image("blaud", "#fac665", 4, shadow="#05070c"), (tx + (art.text_width("Hab") + 1) * 4, ty))
-    lines = ["Seus agentes do Claude Code, ao vivo,", "num escritório em pixel art."]
+    og.alpha_composite(art.text_image("J", "#fac665", 4, shadow="#05070c"), (tx, ty))
+    og.alpha_composite(art.text_image("GENTS", "#f4f1ea", 4, shadow="#05070c"), (tx + (art.text_width("J") + 1) * 4, ty))
+    lines = ["Your Claude Code agents, live,", "in a pixel-art office."]
     for i, line in enumerate(lines):
         img = art.text_image(line, "#c9d3e3", 2)
         if tx + img.width > w - 12:
@@ -314,7 +300,7 @@ def main() -> int:
     parser.add_argument("--out", default=str(PUBLIC), help="pasta de saída (padrão: client/public/assets)")
     args = parser.parse_args()
 
-    specs = json.loads(SPECS.read_text())
+    specs = json.loads(SPECS.read_text(encoding="utf-8"))
     only = {s for s in args.only.split(",") if s}
     out_root = Path(args.out)
     out_root.mkdir(parents=True, exist_ok=True)
@@ -343,9 +329,7 @@ def main() -> int:
 
     # 2) marca, og-image, manifest e folha de contato (dependem dos arquivos acima)
     by_id = {a["id"]: a for a in specs["assets"]}
-    detailed_path = out_root / by_id["logo-mark"]["out"]
-    detailed = Image.open(detailed_path).convert("RGBA") if detailed_path.exists() else None
-    brand = build_brand(detailed, out_root)
+    brand = build_brand(out_root)
 
     ill_spec = by_id["empty-office"]
     ill_path = out_root / ill_spec["out"]
@@ -356,7 +340,7 @@ def main() -> int:
         big = Image.open(ill_path)
         illustration = big.resize((big.width // ill_scale, big.height // ill_scale), Image.NEAREST)
         illustrations["emptyOffice"] = {"file": ill_spec["out"], "w": big.width, "h": big.height, "scale": ill_scale}
-    og = build_og(detailed, illustration, out_root)
+    og = build_og(illustration, out_root)
 
     wall_art = []
     for asset in specs["assets"]:
@@ -375,7 +359,8 @@ def main() -> int:
         wall_art.append(entry)
 
     manifest = {"version": 1, "brand": brand, "illustrations": illustrations, "wallArt": wall_art, "og": og}
-    (out_root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    # LF e UTF-8 em qualquer sistema (no Windows, write_text sem isso grava CRLF e na página de código local)
+    (out_root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"manifest: {len(wall_art)} artes de parede, marca e ilustração -> {out_root / 'manifest.json'}")
 
     if illustrations and wall_art:

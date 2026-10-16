@@ -1,9 +1,8 @@
-"""Pixel art desenhada à mão (mapas de caracteres) para os tamanhos em que a redução automática
-da arte da IA não fica nítida: o mark em 32x32 e 16x16 ("hinting" do desenho da IA, com a mesma
-paleta) e a placa "Habblaud" e textos do og-image com uma fonte bitmap proporcional (5x7, com acentos).
+"""Pixel art desenhada à mão (mapas de caracteres): o mark do JGENTS em 32x32 e 16x16 e a placa
+"JGENTS" e textos do og-image com uma fonte bitmap proporcional (5x7, com acentos).
 
-O desenho de referência é a tomada escolhida de `logo-mark` (prédio frontal, telhado verde-azulado,
-faixas de madeira, janelas acesas em amarelo e duas telas azuis, porta de vidro com toldo).
+O mark é um tile azul-marinho com um J âmbar e o ponto verde de "agente online", desenhado à mão nos
+dois tamanhos (o de 16 não é redução do de 32). Ele substituiu o prédio do Habblaud em 2026-10-16.
 """
 
 from __future__ import annotations
@@ -35,62 +34,67 @@ PALETTE: dict[str, str] = {
     "g": "#198834",  # folha (meio-tom)
     "q": "#033e1f",  # folha (contorno)
     "D": "#a3d4e5",  # vidro da porta
+    # mark do JGENTS
+    "N": "#24304f",  # tile
+    "T": "#34446e",  # tile (luz, borda de cima)
+    "n": "#1a2340",  # tile (sombra) / sombra do J
+    "A": "#fac665",  # J âmbar (a mesma cor do logotipo)
+    "a": "#d9902e",  # J âmbar (sombra)
 }
 
-# Mark 32x32: telhado em laje com borda clara, vaso no canto direito, faixas de madeira, janelas
-# 6x5 com moldura (duas telas azuis no 2º andar, à esquerda e no centro) e porta de vidro com toldo.
+# Mark 32x32: tile azul-marinho arredondado, J âmbar com sombra de 1px e o ponto verde de "agente online".
 MARK_32 = [
-    "....................qGq.qGq.....",
-    "...................qGgGqGgGq....",
-    "...................qgpWWWpgq....",
-    "..JJJJJJJJJJJJJJJJJJJpWWupJJJJ..",
-    ".JLRRRRRRRRRRRRRRRRRRRpppRRRRLJ.",
-    "JLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLJ",
-    "JURRRRRRRRRRRRRRRRRRRRRRRRRRRRUJ",
-    "JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ",
-    "..OffffffffffffffffffffffffffO..",
-    "..OHFKKKKKKFFKKKKKKFFKKKKKKFHO..",
-    "..OHFKYYYYKFFKYYYYKFFKYYYYKFHO..",
-    "..OHFKYYYYKFFKYYYYKFFKYYYYKFHO..",
-    "..OHFKyyyyKFFKyyyyKFFKyyyyKFHO..",
-    "..OHFKKKKKKFFKKKKKKFFKKKKKKFHO..",
-    "..OHFffffffFFffffffFFffffffFHO..",
-    ".bwwwwwwwwwwwwwwwwwwwwwwwwwwwwb.",
-    ".bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.",
-    "..OffffffffffffffffffffffffffO..",
-    "..OHFKKKKKKFFKKKKKKFFKKKKKKFHO..",
-    "..OHFKSSSSKFFKSSSSKFFKYYYYKFHO..",
-    "..OHFKSSSSKFFKSSSSKFFKYYYYKFHO..",
-    "..OHFKssssKFFKssssKFFKyyyyKFHO..",
-    "..OHFKKKKKKFFKKKKKKFFKKKKKKFHO..",
-    "..OHFffffffFFffffffFFffffffFHO..",
-    ".bwwwwwwwwwJJJJJJJJJJwwwwwwwwwb.",
-    ".bbbbbbbbbbJUUUUUUUUJbbbbbbbbbb.",
-    "..OHFKKKKKKJJJJJJJJJJKKKKKKFHO..",
-    "..OHFKYYYYKFuDLDDLDuFKYYYYKFHO..",
-    "..OHFKYYYYKFuLDKKDLuFKYYYYKFHO..",
-    "..OHFKyyyyKFuDDKKDDuFKyyyyKFHO..",
-    "..OHFKKKKKKFuDDKKDDuFKKKKKKFHO..",
-    "..OOOOOOOOOOOOOOOOOOOOOOOOOOOO..",
+    "......OOOOOOOOOOOOOOOOOOOO......",
+    "...OOTTTTTTTTTTTTTTTTTTTTTTOO...",
+    "..ONNNNNNNNNNNNNNNNNNNNNNNNNNO..",
+    ".ONNNNNNNNNNNNNNNNNNNNNNNNNNNNO.",
+    ".ONNNNNNNNNNNNNNNNNNNNNNNNNNNNO.",
+    ".ONNNNNNNNNNNNNNNNNNNNNNGGGNNNO.",
+    "ONNNNNNNNNNNNNNNNNNNNNNGLGGGNNNO",
+    "ONNNNNNNNAAAAAAAAAAAAANGGGGGNNNO",
+    "ONNNNNNNNAAAAAAAAAAAAANGGGgGNNNO",
+    "ONNNNNNNNAAAAAAAAAAAAAANGgGNNNNO",
+    "ONNNNNNNNAAAAAAAAAAAAAanNNNNNNNO",
+    "ONNNNNNNNNnnnnnnnAAAAAnnNNNNNNNO",
+    "ONNNNNNNNNNNNNNNNAAAAAnNNNNNNNNO",
+    "ONNNNNNNNNNNNNNNNAAAAAnNNNNNNNNO",
+    "ONNNNNNNNNNNNNNNNAAAAAnNNNNNNNNO",
+    "ONNNNNNNNNNNNNNNNAAAAAnNNNNNNNNO",
+    "ONNNNNNAAAAANNNNNAAAAAnNNNNNNNNO",
+    "ONNNNNNAAAAAnNNNNAAAAAnNNNNNNNNO",
+    "ONNNNNNAAAAAnNNNNAAAAAnNNNNNNNNO",
+    "ONNNNNNAAAAAnNNNNAAAAAnNNNNNNNNO",
+    "ONNNNNNAAAAAnNNNNAAAAAnNNNNNNNNO",
+    "ONNNNNNaAAAAANNNAAAAAanNNNNNNNNO",
+    "ONNNNNNNAAAAAAAAAAAAAnnNNNNNNNNO",
+    "ONNNNNNNaAAAAAAAAAAAanNNNNNNNNNO",
+    "ONNNNNNNNaAAAAAAAAAannNNNNNNNNNO",
+    "ONNNNNNNNNaaAAAAAaannNNNNNNNNNNO",
+    ".ONNNNNNNNNnaaaaannnNNNNNNNNNNO.",
+    ".ONNNNNNNNNNNnnnnnNNNNNNNNNNNNO.",
+    ".ONNNNNNNNNNNNNNNNNNNNNNNNNNNNO.",
+    "..ONNNNNNNNNNNNNNNNNNNNNNNNNNO..",
+    "...OOnnnnnnnnnnnnnnnnnnnnnnOO...",
+    "......OOOOOOOOOOOOOOOOOOOO......",
 ]
 
-# Mark 16x16 (favicon): mesmas massas de cor, janelas 2x2 sem moldura.
+# Mark 16x16 (favicon): o mesmo tile, desenhado de novo nesse tamanho (não é redução do de 32).
 MARK_16 = [
-    ".........qGgGq..",
-    "..........pWWp..",
-    "..JJJJJJJJJJJJ..",
-    ".JLLLLLLLLLLLLJ.",
-    "JRRRRRRRRRRRRRRJ",
-    "JJJJJJJJJJJJJJJJ",
-    ".OffffffffffffO.",
-    ".OHYYFFYYFFYYHO.",
-    ".OHyyFFyyFFyyHO.",
-    "bwwwwwwwwwwwwwwb",
-    ".OHSSFFSSFFYYHO.",
-    ".OHssFFssFFyyHO.",
-    "bwwwwJUUUUJwwwwb",
-    ".OHYYFuDLuFYYHO.",
-    ".OHyyFuLDuFyyHO.",
+    ".OOOOOOOOOOOOOO.",
+    "OTTTTTTTTTTTTTTO",
+    "ONNNNNNNNNNNNNNO",
+    "ONNNAAAAAAANGGNO",
+    "ONNNaaaaAAANggNO",
+    "ONNNNnnnAAAnNNNO",
+    "ONNNNNNNAAAnNNNO",
+    "ONNNNNNNAAAnNNNO",
+    "ONNAAANNAAAnNNNO",
+    "ONNAAAnNAAAnNNNO",
+    "ONNAAAAAAAAnNNNO",
+    "ONNNaAAAAAannNNO",
+    "ONNNnaaaaannNNNO",
+    "ONNNNnnnnnNNNNNO",
+    "OnnnnnnnnnnnnnnO",
     ".OOOOOOOOOOOOOO.",
 ]
 
@@ -259,7 +263,7 @@ def text_image(text: str, color: str, scale: int = 1, shadow: str | None = None)
 
 
 def signage() -> Image.Image:
-    """Placa da recepção, 64x16: chapa azul-marinho com bisel, parafusos e "Habblaud"."""
+    """Placa da recepção, 64x16: chapa azul-marinho com bisel, parafusos e "JGENTS"."""
     w, h = 64, 16
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     px = img.load()
@@ -279,13 +283,13 @@ def signage() -> Image.Image:
     for sx in (3, w - 4):  # parafusos
         px[sx, 7] = hex_rgba("#c9d3e3")
         px[sx, 8] = hex_rgba("#7d8aa3")
-    # texto centralizado com sombra de 1px; "Hab" claro e "blaud" na cor das janelas acesas
-    tx, ty = (w - text_width("Habblaud")) // 2, 4
-    blaud_x = tx + text_width("Hab") + 1
-    draw_text(img, tx, ty + 1, "Hab", "#151c33")
-    draw_text(img, blaud_x, ty + 1, "blaud", "#151c33")
-    draw_text(img, tx, ty, "Hab", "#f4f1ea")
-    draw_text(img, blaud_x, ty, "blaud", "#fac665")
+    # texto centralizado com sombra de 1px; "J" âmbar (a cor do mark) e "GENTS" claro
+    tx, ty = (w - text_width("JGENTS")) // 2, 4
+    rest_x = tx + text_width("J") + 1
+    draw_text(img, tx, ty + 1, "J", "#151c33")
+    draw_text(img, rest_x, ty + 1, "GENTS", "#151c33")
+    draw_text(img, tx, ty, "J", "#fac665")
+    draw_text(img, rest_x, ty, "GENTS", "#f4f1ea")
     return img
 
 

@@ -8,24 +8,6 @@
   },
   "assets": [
     {
-      "id": "logo-mark",
-      "group": "brand",
-      "aspect": "1:1",
-      "styles": [
-        "pixel",
-        "chroma"
-      ],
-      "prompt": "A pixel art game icon of a charming little modern office building, designed to stay crisp as a tiny app icon. It is drawn on a coarse grid of big square pixels (the building is about 60 pixels wide and 70 pixels tall), every pixel exactly the same size and perfectly aligned to the grid, shown enlarged. Strictly front-facing elevation, as building sprites in classic top-down RPG and management games: perfectly straight vertical walls and horizontal edges, no perspective, no vanishing point, no slanted or diagonal lines, no side wall. A flat teal-blue roof seen from above as a simple rectangle with a light rim and straight vertical sides (not a trapezoid), directly on top of the facade, with one small potted plant on it. Light warm-grey facade with two honey-wood horizontal bands between the floors. Three floors with three big simple windows each: one solid flat color per window inside a dark frame, glowing warm yellow (two of them glowing bright blue like computer screens), with no mullions, no panes, no curtains and nothing drawn inside. A glass double door with a small teal awning in the middle of the ground floor. Only the building: nothing on the ground around it (no furniture, no sofas, no extra plants, no people). Simple, bold, symmetrical, cute; a compact rectangular silhouette, a bit taller than wide, that fills most of the square.",
-      "post": {
-        "kind": "native",
-        "colors": 28,
-        "balance": 0.5,
-        "merge": 12
-      },
-      "out": "brand/logo-detailed.png",
-      "model": "google/gemini-3-pro-image"
-    },
-    {
       "id": "empty-office",
       "group": "illustrations",
       "aspect": "16:9",
@@ -49,7 +31,7 @@
       "id": "painting-mountains",
       "group": "art",
       "kind": "painting",
-      "title": "Montanhas ao amanhecer",
+      "title": "Mountains at dawn",
       "aspect": "16:9",
       "styles": [
         "wallart"
@@ -68,7 +50,7 @@
       "id": "painting-beach",
       "group": "art",
       "kind": "painting",
-      "title": "Praia tropical",
+      "title": "Tropical beach",
       "aspect": "16:9",
       "styles": [
         "wallart"
@@ -87,7 +69,7 @@
       "id": "painting-city-night",
       "group": "art",
       "kind": "painting",
-      "title": "Cidade à noite",
+      "title": "City at night",
       "aspect": "16:9",
       "styles": [
         "wallart"
@@ -108,7 +90,7 @@
       "id": "painting-abstract",
       "group": "art",
       "kind": "painting",
-      "title": "Formas e cores",
+      "title": "Shapes and colors",
       "aspect": "16:9",
       "styles": [
         "wallart"
@@ -127,7 +109,7 @@
       "id": "painting-cat",
       "group": "art",
       "kind": "painting",
-      "title": "Retrato de gato",
+      "title": "Cat portrait",
       "aspect": "16:9",
       "styles": [
         "wallart"
@@ -146,7 +128,7 @@
       "id": "painting-wave",
       "group": "art",
       "kind": "painting",
-      "title": "A grande onda",
+      "title": "The great wave",
       "aspect": "16:9",
       "styles": [
         "wallart"
@@ -165,7 +147,7 @@
       "id": "painting-sunflowers",
       "group": "art",
       "kind": "painting",
-      "title": "Girassóis",
+      "title": "Sunflowers",
       "aspect": "16:9",
       "styles": [
         "wallart"
@@ -184,7 +166,7 @@
       "id": "painting-rio",
       "group": "art",
       "kind": "painting",
-      "title": "Pão de Açúcar",
+      "title": "Sugarloaf Mountain",
       "aspect": "16:9",
       "styles": [
         "wallart"
@@ -203,7 +185,7 @@
       "id": "painting-wide-forest-lake",
       "group": "art",
       "kind": "painting",
-      "title": "Lago na floresta",
+      "title": "Forest lake",
       "aspect": "21:9",
       "styles": [
         "wallart"
@@ -222,7 +204,7 @@
       "id": "painting-wide-color-fields",
       "group": "art",
       "kind": "painting",
-      "title": "Campos de cor",
+      "title": "Color fields",
       "aspect": "21:9",
       "styles": [
         "wallart"
@@ -241,7 +223,7 @@
       "id": "painting-wide-aurora",
       "group": "art",
       "kind": "painting",
-      "title": "Aurora boreal",
+      "title": "Northern lights",
       "aspect": "21:9",
       "styles": [
         "wallart"
@@ -261,7 +243,7 @@
       "group": "art",
       "kind": "poster",
       "variant": "coffee",
-      "title": "Café",
+      "title": "Coffee",
       "aspect": "3:4",
       "styles": [
         "poster"
@@ -281,7 +263,7 @@
       "group": "art",
       "kind": "poster",
       "variant": "rocket",
-      "title": "Foguete",
+      "title": "Rocket",
       "aspect": "3:4",
       "styles": [
         "poster"
@@ -301,7 +283,7 @@
       "group": "art",
       "kind": "poster",
       "variant": "code",
-      "title": "Código",
+      "title": "Code",
       "aspect": "3:4",
       "styles": [
         "poster"
@@ -321,7 +303,7 @@
       "group": "art",
       "kind": "poster",
       "variant": "cat",
-      "title": "Gato",
+      "title": "Cat",
       "aspect": "3:4",
       "styles": [
         "poster"
@@ -341,7 +323,7 @@
       "group": "art",
       "kind": "poster",
       "variant": "bug",
-      "title": "Sem bugs",
+      "title": "No bugs",
       "aspect": "3:4",
       "styles": [
         "poster"
