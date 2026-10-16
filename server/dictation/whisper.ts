@@ -32,30 +32,44 @@ export interface Transcript {
 
 export type Transcriber = (audio: Buffer, type: string) => Promise<Transcript>;
 
-/** No Windows, só o .exe (whisper-cli.exe, ffmpeg.exe): o execFile, sem shell, não roda os scripts .cmd/.bat. */
-const EXE = process.platform === 'win32' ? '.exe' : '';
-
-function onPath(name: string, env: NodeJS.ProcessEnv, exists: (p: string) => boolean): string | undefined {
+function onPath(name: string, env: NodeJS.ProcessEnv, exists: (p: string) => boolean, exe: string): string | undefined {
   for (const dir of (env.PATH ?? '').split(delimiter)) {
     if (!dir) continue;
-    const p = join(dir, name + EXE);
+    const p = join(dir, name + exe);
     if (exists(p)) return p;
   }
   return undefined;
 }
 
-/** Acha o whisper-cli, o ffmpeg e o melhor modelo multilíngue; undefined (com o motivo) se faltar algum. */
-export function findWhisper(env: NodeJS.ProcessEnv = process.env, exists: (p: string) => boolean = existsSync): WhisperSetup | { missing: string } {
+/**
+ * Acha o whisper-cli, o ffmpeg e o melhor modelo multilíngue; undefined (com o motivo e como instalar) se faltar algum.
+ * `platform` muda o que se procura no PATH e as dicas. No Windows, só o .exe (whisper-cli.exe, ffmpeg.exe): o execFile,
+ * sem shell, não roda os scripts .cmd/.bat. As dicas lá não são Homebrew: o whisper.cpp só tem pacote no Scoop (o winget
+ * não tem), o ffmpeg vem pelo winget (que já vem no Windows), e a pasta do modelo sai inteira (C:\Users\...), sem "~".
+ */
+export function findWhisper(
+  env: NodeJS.ProcessEnv = process.env,
+  exists: (p: string) => boolean = existsSync,
+  platform: NodeJS.Platform = process.platform,
+): WhisperSetup | { missing: string } {
+  const win = platform === 'win32';
+  const exe = win ? '.exe' : '';
   const home = env.HOME || homedir();
-  const bin = env.JGENTS_WHISPER_BIN?.trim() || ['/opt/homebrew/bin/whisper-cli', '/usr/local/bin/whisper-cli'].find(exists) || onPath('whisper-cli', env, exists);
-  if (!bin || !exists(bin)) return { missing: 'whisper-cli (brew install whisper-cpp)' };
-  const ffmpeg = env.JGENTS_FFMPEG_BIN?.trim() || ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg'].find(exists) || onPath('ffmpeg', env, exists);
-  if (!ffmpeg || !exists(ffmpeg)) return { missing: 'ffmpeg (brew install ffmpeg)' };
+  const bin = env.JGENTS_WHISPER_BIN?.trim() || ['/opt/homebrew/bin/whisper-cli', '/usr/local/bin/whisper-cli'].find(exists) || onPath('whisper-cli', env, exists, exe);
+  if (!bin || !exists(bin)) return { missing: win ? 'whisper-cli (scoop install whisper-cpp)' : 'whisper-cli (brew install whisper-cpp)' };
+  const ffmpeg = env.JGENTS_FFMPEG_BIN?.trim() || ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg'].find(exists) || onPath('ffmpeg', env, exists, exe);
+  if (!ffmpeg || !exists(ffmpeg)) return { missing: win ? 'ffmpeg (winget install Gyan.FFmpeg)' : 'ffmpeg (brew install ffmpeg)' };
   const dirs = [join(home, '.local', 'share', 'whisper'), join(home, '.whisper'), '/opt/homebrew/share/whisper-cpp', '/usr/local/share/whisper-cpp'];
   const model =
     env.JGENTS_WHISPER_MODEL?.trim() ||
     MODELS.flatMap((m) => dirs.map((d) => join(d, m))).find(exists);
-  if (!model || !exists(model)) return { missing: tr('um modelo multilíngue do Whisper (ggml-small.bin ou ggml-base.bin em ~/.local/share/whisper)') };
+  if (!model || !exists(model)) {
+    return {
+      missing: win
+        ? tr('um modelo multilíngue do Whisper (ggml-small.bin ou ggml-base.bin em {0})', [dirs[0]])
+        : tr('um modelo multilíngue do Whisper (ggml-small.bin ou ggml-base.bin em ~/.local/share/whisper)'),
+    };
+  }
   const langs = (env.JGENTS_DICTATION_LANGS ?? '')
     .split(',')
     .map((l) => l.trim().toLowerCase())
