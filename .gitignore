@@ -8,3 +8,9 @@ scripts/assets/.cache/
 
 # Configurações locais do Claude Code e caches de geração
 .claude/
+
+# Windows install: the node.exe pinned by windows/Install-JGENTS.ps1
+windows/node.path
+
+# Python bytecode from running scripts/assets/*.py
+__pycache__/

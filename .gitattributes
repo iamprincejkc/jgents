@@ -1,3 +1,6 @@
 # LF sempre, seja qual for o core.autocrlf. Num checkout em CRLF, os template literals de várias linhas ganham "\r\n",
 # as chaves do tr() deixam de bater com shared/locales e esses textos ficam sem tradução (npm run i18n:check falha).
 * text=auto eol=lf
+# Scripts do Windows (VBScript, PowerShell): CRLF, o formato nativo deles.
+*.vbs text eol=crlf
+*.ps1 text eol=crlf

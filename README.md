@@ -14,6 +14,7 @@
 > **Origin.** JGENTS started as a fork of [Habblaud](https://github.com/marmottajr/habblaud) by Márcio Junior (MIT), at version 0.11.0.
 > It is renamed throughout (the `/jgents` command, `JGENTS_*` settings, the `~/.jgents` data folder) and moves an existing Habblaud install over on first start.
 > It defaults to English everywhere, including the Claude Code add-on in `mod/` and demo mode, and runs cleanly on Windows.
+> On Windows, `npm run build` then `npm run win:install` keeps it running in the background (it starts with Windows and restarts itself) and adds a JGENTS shortcut you can pin to the taskbar.
 > The rest of this README is Habblaud's documentation with the name changed.
 
 <p align="center">
