@@ -32,11 +32,14 @@ export interface Transcript {
 
 export type Transcriber = (audio: Buffer, type: string) => Promise<Transcript>;
 
-function onPath(name: string, env: NodeJS.ProcessEnv): string | undefined {
+/** No Windows, só o .exe (whisper-cli.exe, ffmpeg.exe): o execFile, sem shell, não roda os scripts .cmd/.bat. */
+const EXE = process.platform === 'win32' ? '.exe' : '';
+
+function onPath(name: string, env: NodeJS.ProcessEnv, exists: (p: string) => boolean): string | undefined {
   for (const dir of (env.PATH ?? '').split(delimiter)) {
     if (!dir) continue;
-    const p = join(dir, name);
-    if (existsSync(p)) return p;
+    const p = join(dir, name + EXE);
+    if (exists(p)) return p;
   }
   return undefined;
 }
@@ -44,9 +47,9 @@ function onPath(name: string, env: NodeJS.ProcessEnv): string | undefined {
 /** Acha o whisper-cli, o ffmpeg e o melhor modelo multilíngue; undefined (com o motivo) se faltar algum. */
 export function findWhisper(env: NodeJS.ProcessEnv = process.env, exists: (p: string) => boolean = existsSync): WhisperSetup | { missing: string } {
   const home = env.HOME || homedir();
-  const bin = env.JGENTS_WHISPER_BIN?.trim() || ['/opt/homebrew/bin/whisper-cli', '/usr/local/bin/whisper-cli'].find(exists) || onPath('whisper-cli', env);
+  const bin = env.JGENTS_WHISPER_BIN?.trim() || ['/opt/homebrew/bin/whisper-cli', '/usr/local/bin/whisper-cli'].find(exists) || onPath('whisper-cli', env, exists);
   if (!bin || !exists(bin)) return { missing: 'whisper-cli (brew install whisper-cpp)' };
-  const ffmpeg = env.JGENTS_FFMPEG_BIN?.trim() || ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg'].find(exists) || onPath('ffmpeg', env);
+  const ffmpeg = env.JGENTS_FFMPEG_BIN?.trim() || ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg'].find(exists) || onPath('ffmpeg', env, exists);
   if (!ffmpeg || !exists(ffmpeg)) return { missing: 'ffmpeg (brew install ffmpeg)' };
   const dirs = [join(home, '.local', 'share', 'whisper'), join(home, '.whisper'), '/opt/homebrew/share/whisper-cpp', '/usr/local/share/whisper-cpp'];
   const model =
