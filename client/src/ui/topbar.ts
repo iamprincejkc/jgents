@@ -46,6 +46,9 @@ export class TopBar implements UiComponent {
   private timelapseBtn: HTMLButtonElement;
   readonly settingsBtn: HTMLButtonElement;
   private readonly spawnBtn: HTMLButtonElement;
+  /** Crew chat (crew.html): one chat for every agent; the badge counts the questions waiting on its board. */
+  private readonly crewBtn: HTMLButtonElement;
+  private readonly crewBadge: HTMLElement;
   private readonly spawnPanel: SpawnPanel;
   /** Grupo dos botões de painéis (feed, configurações, ajuda); o histórico entra aqui (ui/index.ts). */
   readonly panelGroup: HTMLElement;
@@ -108,6 +111,11 @@ export class TopBar implements UiComponent {
     this.spawnBtn = iconButton(ICONS.newAgent, tr('Novo agente: começa uma sessão do Claude Code no computador'), () => this.spawnPanel.toggle(this.spawnBtn), 'ui-btn-spawn');
     this.spawnBtn.setAttribute('aria-haspopup', 'dialog');
     this.spawnBtn.hidden = true;
+    this.crewBtn = iconButton(ICONS.crew, 'Crew chat: one chat for all your agents, with their questions for you', () => location.assign('/crew.html'), 'ui-btn-crew');
+    this.crewBadge = h('span', { class: 'ui-btn-crew__badge', hidden: true });
+    this.crewBtn.append(this.crewBadge);
+    this.crewBtn.hidden = true;
+    this.pollCrew();
     this.version = new VersionChip(ctx, this.settingsBtn);
     const viewGroup = h(
       'div',
@@ -119,6 +127,7 @@ export class TopBar implements UiComponent {
     const panelGroup = h(
       'div',
       { class: 'ui-btn-group', role: 'group', attrs: { 'aria-label': tr('Painéis') } },
+      this.crewBtn,
       this.spawnBtn,
       this.timelapseBtn,
       this.feedBtn,
@@ -145,6 +154,27 @@ export class TopBar implements UiComponent {
       this.usage.el,
       h('div', { class: 'ui-topbar__right' }, viewGroup, panelGroup),
     );
+  }
+
+  /** Shows the Crew button when the crew is on (local access only) and how many questions wait on its board. */
+  private pollCrew(): void {
+    const tick = async () => {
+      try {
+        const res = await fetch('/api/crew/summary');
+        const s = res.ok ? ((await res.json()) as { enabled?: boolean; open?: number; working?: number }) : undefined;
+        this.crewBtn.hidden = !s?.enabled;
+        const open = s?.open ?? 0;
+        this.crewBadge.hidden = !open;
+        this.crewBadge.textContent = String(open);
+        const label = open ? `Crew chat: ${open} question(s) waiting for you` : `Crew chat${s?.working ? ` · ${s.working} working` : ''}`;
+        this.crewBtn.title = label;
+        this.crewBtn.setAttribute('aria-label', label);
+      } catch {
+        this.crewBtn.hidden = true;
+      }
+    };
+    void tick();
+    setInterval(() => void tick(), 10_000);
   }
 
   /** Acrescenta um botão de janela própria (ex.: Meu dia) ao começo do grupo de painéis. */

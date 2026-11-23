@@ -49,6 +49,8 @@ import { DictationService } from './dictation/dictation';
 import { createWhisperTranscriber, findWhisper } from './dictation/whisper';
 import { DeliveryIndex } from './deliveries/deliveries';
 import { FileFetcher } from './deliveries/fetcher';
+import { CrewService } from './crew/service';
+import { createCrewHandler } from './crew/http';
 
 const config = loadConfig();
 const startedAt = Date.now();
@@ -274,6 +276,42 @@ const ticker = setInterval(() => {
   }
 }, 250);
 
+/** Recent project folders (the Novo agente and the Crew's "Add agent" suggest them). */
+async function spawnFolders() {
+  const snap = hub.current();
+  const last = new Map<string, number>();
+  for (const a of snap.agents) last.set(a.roomId, Math.max(last.get(a.roomId) ?? 0, a.lastEventAt ?? 0));
+  const rooms = snap.rooms.filter((r) => !isDemoId(r.id)).map((r) => ({ path: r.path, lastAt: last.get(r.id) ?? 0 }));
+  return recentFolders(history ? await history.list().catch(() => []) : [], rooms);
+}
+
+// Crew (server/crew): one chat for a team of long-lived Claude Code agents. It runs Claude Code on this computer, so
+// it needs the same local-only lock as the messages and the Node mode (not Docker); JGENTS_CREW=0 turns it off.
+const crewFlag = process.env.JGENTS_CREW?.trim();
+const crewOffReason = config.inDocker
+  ? 'it runs Claude Code on this computer, so it needs JGENTS running directly (npm start or win:install), not in Docker'
+  : !config.messages
+    ? `same lock as the messages (${messagesOffReason(process.env, config.host, config.inDocker) ?? 'off'})`
+    : crewFlag && !isTruthy(crewFlag)
+      ? 'turned off by JGENTS_CREW'
+      : '';
+const crewBin = crewOffReason ? undefined : runnableClaudeBin(process.env);
+const crew = crewOffReason
+  ? undefined
+  : new CrewService({
+      dataDir: config.dataDir,
+      port: config.port,
+      claudeBin: crewBin,
+      claudeDirs: config.claudeDirs,
+      disabledReason: 'the "claude" executable was not found on the PATH (set JGENTS_CLAUDE_BIN)',
+      bridgeScript: join(config.rootDir, 'mod', 'jgents-crew', 'mcp.mjs'),
+      nodeBin: process.execPath,
+      env: process.env,
+      routerModel: process.env.JGENTS_CREW_ROUTER_MODEL?.trim() || 'haiku',
+      maxParallel: Number(process.env.JGENTS_CREW_MAX_PARALLEL) || 4,
+    });
+const crewApi = createCrewHandler({ crew, offReason: crewOffReason || (crew?.reason ?? ''), isRemote: isRemoteRequest, folders: spawnFolders });
+
 const api = createApiHandler({
   renameRoom: (id, name) => {
     const path = office.roomPath(id);
@@ -300,13 +338,7 @@ const api = createApiHandler({
   dictation,
   deliveries,
   files: deliveryFiles,
-  spawnFolders: async () => {
-    const snap = hub.current();
-    const last = new Map<string, number>();
-    for (const a of snap.agents) last.set(a.roomId, Math.max(last.get(a.roomId) ?? 0, a.lastEventAt ?? 0));
-    const rooms = snap.rooms.filter((r) => !isDemoId(r.id)).map((r) => ({ path: r.path, lastAt: last.get(r.id) ?? 0 }));
-    return recentFolders(history ? await history.list().catch(() => []) : [], rooms);
-  },
+  spawnFolders,
   codexLive,
   stats,
   updates,
@@ -348,7 +380,7 @@ server.on('request', (req, res) => {
   const url = parseUrl(req);
   try {
     if (guard(req, res)) return;
-    if (!api(req, res, url)) fallback(req, res, url);
+    if (!crewApi(req, res, url) && !api(req, res, url)) fallback(req, res, url);
   } catch (err) {
     log.warn(tr('Erro ao responder {0} {1}: {2}', [req.method, url.pathname, errMsg(err)]));
     if (!res.headersSent) sendJson(res, 500, { error: tr('erro interno') });
@@ -382,7 +414,7 @@ if (config.remote) {
       try {
         if (guard(req, res)) return;
         if (gate(req, res, url)) return;
-        if (!api(req, res, url)) fallback(req, res, url);
+        if (!crewApi(req, res, url) && !api(req, res, url)) fallback(req, res, url);
       } catch (err) {
         log.warn(tr('Erro ao responder (remoto) {0} {1}: {2}', [req.method, url.pathname, errMsg(err)]));
         if (!res.headersSent) sendJson(res, 500, { error: tr('erro interno') });
@@ -429,6 +461,7 @@ server.listen(config.port, config.host, () => {
   if (office.isDemo()) log.info(tr('   Modo demonstração ligado (agentes simulados misturados aos reais).'));
   if (config.terminal) log.info(tr('   Terminal: ligado (acesso só local).'));
   else log.info(tr('   Terminal: desligado ({0}).', [terminalOffReason(process.env, config.host, config.inDocker)]));
+  log.info(crew?.enabled ? `   Crew: on at http://localhost:${config.port}/crew (${crew.agents().length} agents, router: ${crew.routerModel}).` : `   Crew: off (${crewOffReason || crew?.reason}).`);
   log.info(ptys ? tr('   Terminal interativo: ligado ({0}).', [claudeBin]) : tr('   Terminal interativo: {0}.', [ptyOff ?? tr('desligado')]));
   log.info(
     !spawn
@@ -477,6 +510,7 @@ function shutdown(signal: string): void {
   permissions?.stop();
   messages?.stop();
   ptys?.stopAll();
+  crew?.shutdown();
   updates.stop();
   names.flush();
   void closeVite?.();

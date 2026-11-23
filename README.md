@@ -566,6 +566,45 @@ and waits for the next request, give a new instruction or correct its course, wi
   From the [phone with login](#phone-with-login-and-https-approving-requests), only with `messages` in `JGENTS_REMOTE_ALLOW`.
 - In demo mode, the made-up agents also receive messages (pretend ones).
 
+### Crew: one chat for a team of agents
+
+Open **http://localhost:4747/crew** (or the speech-bubble button in the top bar) for a Claude-style chat with your whole
+crew. It is not one session with subagents: each agent is its **own long-lived Claude Code session**, with its own
+working folder, instructions and memory, and you talk to all of them from one place.
+
+- **Routing.** Write a request and the dispatcher (a quick `haiku` call that reads each agent's role, description and
+  keywords, and the last few exchanges) hands it to the right agent, or splits it when it holds independent jobs.
+  `@ho-oh …` or the picker under the box sends it straight to one agent. Follow-ups ("also add tests") stay with the
+  agent you were talking to. Different agents work in parallel; each agent's requests queue up.
+- **Q&A board.** Agents don't ask in a terminal: their questions (`ask_user`) and their requests to run a tool land on
+  the **Questions for you** board on the right, with one-click options, Allow / Always allow / Deny, a badge in the
+  tab title and the office button, and an optional browser notification. An answer given after the agent's turn ended
+  reaches it as a new message.
+- **Handoffs.** An agent can give part of a job to a teammate (`handoff`), e.g. Giratina passes a fix to the
+  project's agent.
+- **Agents.** A new crew starts with three, named after legendary Pokémon so the handle tells you who does what:
+  **Arceus** (@arceus, the Original One: general questions, research, planning),
+  **Ho-Oh** (@ho-oh, rainbow wings: videos and motion graphics with [HyperFrames](https://github.com/heygen-com/hyperframes);
+  needs Node 22+ and FFmpeg) and **Giratina** (@giratina, from the Distortion World: authorised penetration tests with
+  [Strix](https://github.com/usestrix/strix); needs Docker, `strix`, and `STRIX_LLM` + `LLM_API_KEY` in JGENTS'
+  environment). Add one agent per product with **New agent**: it suggests a free legendary that fits (Dialga, master
+  of time, for a billing/payments product; Palkia, master of space, for logistics…) and your recent project folders.
+  An agent can span several folders of the same product (**Also works in**: the UI next to the API, passed as
+  `--add-dir`). Each agent's settings show its toolbox check, its model, its permission mode, the tools it may use
+  without asking, and **Fresh start** (forget the conversation; files stay).
+- **Your Claude Code sessions.** Each agent has one ongoing conversation. **Start from a session** lists your recent
+  Claude Code sessions in the agent's folders (desktop app, terminal or IDE) and lets the agent **take over** one
+  (it continues that exact conversation; not while it is open in Claude Code) or **fork** it (it starts from a copy and
+  your original stays as it is). Picking a session of the UI folder makes the UI the agent's working folder. The
+  agent's own conversation is a normal Claude Code session too: **Terminal** under a reply copies
+  `claude --resume <id>` to open it yourself (not while the agent is working).
+- **How it runs.** Each turn is `claude -p` in the agent's folder, resuming its session (`--resume`), with the JGENTS
+  bridge (`mod/jgents-crew/mcp.mjs`, an MCP server) for questions, approvals and handoffs. The prompt goes on stdin.
+  Every reply shows its steps, time and cost; **Terminal** copies the `claude --resume` command to open that
+  conversation yourself. The roster, chat and board live in `~/.jgents/crew/`.
+- **Requirements.** Claude Code logged in for your user (run `claude` once and `/login`), JGENTS in Node mode
+  (`npm start` / `win:install`, not Docker) and local access, like the terminal. `JGENTS_CREW=0` turns it off.
+
 ### Editing the character
 
 Each session arrives with a random name and look. To pin a project's character, open the main
@@ -728,7 +767,10 @@ Everything works without configuring anything. If you need to adjust something, 
 | `JGENTS_ALLOWED_HOSTS` | — | Extra names accepted in the address (e.g. `meu-mac.local`), besides `localhost` and IPs. |
 | `JGENTS_TERMINAL` | on (local access only) | `0` turns off the terminal, answering and sending messages from the office, and the character editor. With the port exposed they're already off, with no way to turn them on. |
 | `JGENTS_PTY` | off | `1` turns on the interactive terminal (open, take over and end Claude Code sessions from the office; local access only and outside Docker) and **New agent** (also in Docker, through `npm run codex:bridge`). Read the warning in [Privacy and security](#privacy-and-security). |
-| `JGENTS_CLAUDE_BIN` | `claude` from PATH | The Claude Code executable that the interactive terminal and New agent run. |
+| `JGENTS_CLAUDE_BIN` | `claude` from PATH | The Claude Code executable that the interactive terminal, New agent and the [Crew](#crew-one-chat-for-a-team-of-agents) run. |
+| `JGENTS_CREW` | on (local access, Node mode) | `0` turns off the [Crew chat](#crew-one-chat-for-a-team-of-agents). |
+| `JGENTS_CREW_ROUTER_MODEL` | `haiku` | Model the Crew's dispatcher uses to decide which agent gets a request. |
+| `JGENTS_CREW_MAX_PARALLEL` | `4` | How many Crew agents may run a turn at the same time (each agent still runs one turn at a time). |
 | `JGENTS_REMOTE_ALLOW` | `permissions` | What the [phone with login](#phone-with-login-and-https-approving-requests) can do: `permissions`, `messages`, `terminal`, `spawn` (comma-separated) or `none`. The other `JGENTS_REMOTE_*` are written by `npm run remote:setup`. |
 | `JGENTS_MESSAGES` | on (with the terminal) | `0` turns off only messages from the office (the box in the terminal and in the agent's details). |
 | `JGENTS_CODEX` | on | `0` turns off Codex in the office. |

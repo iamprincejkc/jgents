@@ -89,6 +89,7 @@ festa) ou 10 min. Push só avisa. O mesmo CI visto de novo em 2 min não repete 
 | `POST /api/messages` | (página) `{agentId, text}`: manda uma mensagem a um agente principal; `201 OutboxMessage`; só com bind local (ver abaixo) |
 | `GET /api/messages/:id` | (página) situação da mensagem (`OutboxMessage`: `queued` \| `sent` \| `delivered` \| `failed`) |
 | `POST /api/mod/inbox` | (plugin `jgents-messages`) `{session, account?}`: marca a presença da sessão e entrega `{messages: InboxMessage[]}` |
+| `GET /api/crew` · `GET /api/crew/stream` | Crew (`server/crew/`): `CrewSnapshot` and its SSE (`snapshot`, `message`, `delta`, `state`, `question`, `agents`, `cleared`); the other routes are listed at the top of `server/crew/http.ts`. Local access only, Node mode |
 | `POST /api/mod/inbox/ack` | (plugin) `{session, results: [{id, ok, error?}]}`: confirma cada mensagem entregue (ou a falha) |
 
 O snapshot (SSE e `GET /api/snapshot`) leva só as últimas 8 atividades de cada agente em `recent`; o histórico

@@ -10,6 +10,16 @@ do meio (0.**3**.0).
 
 ## [Não lançado]
 
+### Added
+
+- **Crew** (`/crew`): one Claude-style chat for a team of long-lived Claude Code agents. A dispatcher routes each
+  request to the right agent (or `@mention` one); each agent keeps its own session, folder and memory and runs in
+  parallel with the others. Agents ask questions and request approvals on a **Questions for you** board, and can hand
+  work to each other. Starts with Arceus (concierge), Ho-Oh (video with HyperFrames) and Giratina (pentests with
+  Strix); project agents are added from the page, named after legendary Pokémon, can span several folders (API + UI)
+  and can take over or fork one of your existing Claude Code sessions. A Crew button
+  in the office's top bar shows how many questions wait for you.
+
 ## [0.11.0] - 2026-10-13
 
 Para atualizar: `git pull` e `npm run docker:up` (ele também atualiza o mod do Habblaud nas contas). O acesso pelo
