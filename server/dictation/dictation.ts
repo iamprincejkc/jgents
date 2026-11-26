@@ -41,6 +41,8 @@ interface Entry {
 export interface DictationServiceOptions {
   /** Modo Node com Whisper: transcreve aqui. Ausente: fila para o auxiliar do host. */
   transcriber?: Transcriber;
+  /** (Node mode without the Whisper) What is missing, with how to install it (findWhisper): GET /api/dictation says it. */
+  missing?: string;
   now?: () => number;
   newId?: () => string;
 }
@@ -71,6 +73,12 @@ export class DictationService {
 
   available(): boolean {
     return !!this.opts.transcriber || this.host.present();
+  }
+
+  /** What GET /api/dictation answers: available, or (when known) what is missing to transcribe here. */
+  status(): { available: boolean; missing?: string } {
+    const available = this.available();
+    return available || !this.opts.missing ? { available } : { available, missing: this.opts.missing };
   }
 
   submit(raw: unknown): DictationSubmit {

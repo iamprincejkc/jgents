@@ -22,6 +22,7 @@ import { AUDIO_BODY_MAX, type DictationService } from '../dictation/dictation';
 import type { DeliveryIndex } from '../deliveries/deliveries';
 import type { FileFetcher } from '../deliveries/fetcher';
 import { HOST_WAIT_MS } from '../host-wait';
+import { handleCreaturesRoute } from './creatures';
 
 export interface ApiDeps {
   office: Office;
@@ -89,6 +90,8 @@ export interface ApiDeps {
    * JGENTS_REMOTE_ALLOW libera. Requisição remota nunca vale pelo Host: só pelo que `allows` liberar.
    */
   remote?: { is(req: IncomingMessage): boolean; allows(feature: RemoteFeature): boolean };
+  /** The owner's creature pack folder (GET /api/creatures*, http/creatures.ts). Absent = an empty pack. */
+  creaturesDir?: string;
 }
 
 /** GET /api/agents/:id/terminal (ids nunca contêm '/'). */
@@ -518,7 +521,7 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
       else if (!trusted(req, 'spawn') && !trusted(req, 'messages')) {
         sendJson(res, 403, { error: denied(req, tr('o ditado só funciona pelo próprio computador (http://localhost)')) });
       }
-      else if (path === '/api/dictation' && isRead) sendJson(res, 200, { available: dictation.available() });
+      else if (path === '/api/dictation' && isRead) sendJson(res, 200, dictation.status());
       else if (path === '/api/dictation' && method === 'POST') {
         readJson(req, AUDIO_BODY_MAX)
           .then((body) => {
@@ -663,6 +666,13 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
     }
     if (path === '/api/stats' || path.startsWith('/api/stats/')) {
       handleStatsRoute(req, res, url, deps.stats, sendJson);
+      return true;
+    }
+    if (path === '/api/creatures' || path.startsWith('/api/creatures/')) {
+      if (!deps.creaturesDir) {
+        if (!isRead) methodNotAllowed(res, 'GET, HEAD');
+        else sendJson(res, 200, { creatures: [], warnings: [] });
+      } else handleCreaturesRoute(req, res, path, { dir: deps.creaturesDir, remote: isRemote(req) }, sendJson);
       return true;
     }
     if (path === '/api/demo') {

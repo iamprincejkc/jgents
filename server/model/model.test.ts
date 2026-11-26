@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { Activity } from '../../shared/types';
+import { COMPANY_CEO_ID, COMPANY_ROOM_ID, type Activity, type AgentInfo } from '../../shared/types';
 import { nameKey } from '../../shared/appearance';
 import { hash32 } from '../../shared/hash';
 import { NAME_POOL } from '../../shared/names';
@@ -503,6 +503,29 @@ describe('Office', () => {
     on.setDemo(true);
     expect(on.commit().snapshot.agents.filter((a) => a.canMessage).every((a) => a.kind === 'main' && a.id.startsWith('demo:'))).toBe(true);
     expect(on.commit().snapshot.agents.some((a) => a.canMessage)).toBe(true);
+  });
+
+  it('the company: its members go in snapshot.company, and its own sessions open no room and no notice', () => {
+    const deps = { names: new NameStore(null), version: 't', startedAt: 0, accounts: () => [], sources: () => [], accountName: () => undefined };
+    const ceo: AgentInfo = { id: COMPANY_CEO_ID, kind: 'main', roomId: COMPANY_ROOM_ID, name: 'CEO', look: 'm', role: 'CEO', sessionId: '', account: '', status: 'idle', recent: [], tasks: [], startedAt: 0, lastEventAt: 0, statusSince: 0, stats: { toolCalls: 0, tokensIn: 0, tokensOut: 0, subagents: 0 }, seed: 1 };
+    let company: AgentInfo[] = [];
+    const office = new Office({ ...deps, company: () => company, hidden: (cwd) => cwd.startsWith('/jgents/workspaces/') });
+    // a member's turn: a Claude Code session in its workspace
+    office.addMain({ id: 'acc:9', account: 'acc', sessionId: 's9', cwd: '/jgents/workspaces/hr', role: 'Agente principal', startedAt: 0, status: 'working' });
+    office.addSub({ id: 's9:sub', parentId: 'acc:9', sessionId: 's9', role: 'Explore', background: false, startedAt: 0 });
+    office.addActivity('acc:9', act('a1', 0), true);
+    office.addMain({ id: 'acc:1', account: 'acc', sessionId: 's1', cwd: '/p/a', role: 'Agente principal', startedAt: 0, status: 'working' });
+    let r = office.commit();
+    expect(r.snapshot.rooms.map((x) => x.path)).toEqual(['/p/a']);
+    expect(r.snapshot.agents.map((a) => a.id)).toEqual(['acc:1']);
+    expect(r.snapshot.company).toBeUndefined();
+    expect(r.notices.some((n) => n.agentId === 'acc:9')).toBe(false);
+    expect(r.feed.some((f) => f.agentId === 'acc:9')).toBe(false);
+    company = [ceo];
+    office.markDirty();
+    r = office.commit();
+    expect(r.snapshot.company?.map((a) => a.id)).toEqual([COMPANY_CEO_ID]);
+    expect(r.snapshot.agents.map((a) => a.id)).toEqual(['acc:1']);
   });
 });
 

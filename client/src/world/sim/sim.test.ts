@@ -4,6 +4,7 @@ import type { AppearanceParts } from '../../../../shared/appearance';
 import type { AgentInfo, OfficeSnapshot, RoomInfo, ShellJob } from '../../../../shared/types';
 import type { Appearance, ArtModule, RoomTheme } from '../../art/api';
 import { DEFAULT_WORLD_OPTIONS } from '../api';
+
 import type { Character } from './character';
 import { SHELL_DONE_TOOL, Sim } from './sim';
 
@@ -274,6 +275,34 @@ describe('simulação do escritório', () => {
     expect(sim.rooms.get('/b')!.lightOn).toBe(true);
   });
 
+  it('back from a hidden tab: an idle one out and about carries on; one who started working is already at the desk', () => {
+    const sim = newSim();
+    const clock = { now: T0 };
+    sim.applySnapshot(snap([room('/a', 0)], [agent('ana', '/a', 'idle'), agent('bia', '/a', 'idle')]), clock.now);
+    run(sim, clock, 0.5);
+    const ana = sim.chars.get('ana')!;
+    const bia = sim.chars.get('bia')!;
+    ana.nextOutingAt = 1;
+    run(sim, clock, 30, () => ana.atSpot !== ana.homeSpot && ana.step?.t === 'go');
+    expect(ana.step?.t).toBe('go');
+    const going = ana.step;
+    const where = { x: ana.x, y: ana.y };
+    // the tab was hidden for a minute: frames stopped; meanwhile bia got a request
+    sim.applySnapshot(snap([room('/a', 0)], [agent('ana', '/a', 'idle'), agent('bia', '/a', 'working')], 2), clock.now);
+    clock.now += 60_000;
+    sim.fastForward(clock.now);
+    // ana is where she was, still on her way (not snapped back to her seat)
+    expect(ana.step).toBe(going);
+    expect({ x: ana.x, y: ana.y }).toEqual(where);
+    expect(ana.atSpot).not.toBe(ana.homeSpot);
+    // bia is at her desk
+    expect(bia.atSpot).toBe(bia.homeSpot);
+    expect(sim.spots.get(bia.homeSpot)?.kind).toBe('desk');
+    // and ana finishes her outing normally afterwards
+    run(sim, clock, 90, () => ana.atSpot === ana.homeSpot && !ana.step && !ana.queue.length);
+    expect(ana.atSpot).toBe(ana.homeSpot);
+  });
+
   it('snapshots com falhas não quebram o mundo', () => {
     const sim = newSim();
     const clock = { now: T0 };
@@ -446,7 +475,7 @@ describe('salas sem buracos', () => {
     const clock = { now: T0 };
     sim.applySnapshot(snap([room('/c', 8), room('/a', 0), room('/b', 3)], [agent('ana', '/a', 'working'), agent('bia', '/b', 'working'), agent('caio', '/c', 'working')]), clock.now);
     expect(['/a', '/b', '/c'].map((id) => sim.rooms.get(id)!.slot)).toEqual([0, 1, 2]);
-    expect(sim.building.cols).toBe(4);
+    expect(sim.building.floors).toBe(1);
   });
 
   it('terminal fechou: a sala mais distante se muda para a vaga, o pessoal vai andando e o prédio encolhe', () => {
@@ -460,7 +489,7 @@ describe('salas sem buracos', () => {
     const caio = sim.chars.get('caio')!;
     const homeBefore = caio.homeSpot;
     expect(c.slot).toBe(2);
-    expect(sim.building.cols).toBe(4);
+    expect(sim.building.floors).toBe(1);
 
     // a sessão da sala /b fecha: bia vai embora e a sala é desmontada
     sim.applySnapshot(snap([room('/a', 0), room('/c', 2)], [agents[0], agent('bia', '/b', 'offline'), agents[2], agents[3]], 2), clock.now);
@@ -493,8 +522,8 @@ describe('salas sem buracos', () => {
     expect(c.lightOn).toBe(true);
     // o endereço antigo esvaziou, apagou e foi desmontado; o prédio voltou a ter uma coluna de salas
     expect(sim.rooms.has(ghost!.id)).toBe(false);
-    run(sim, clock, 10, () => sim.building.cols === 3);
-    expect(sim.building.cols).toBe(3);
+    run(sim, clock, 10, () => sim.building.floors === 1);
+    expect(sim.building.floors).toBe(1);
     // davi (ocioso, talvez passeando) também tem o lugar dele na sala nova
     expect(c.layout.spots.some((p) => p.id === sim.chars.get('davi')!.homeSpot)).toBe(true);
   });
@@ -514,8 +543,8 @@ describe('salas sem buracos', () => {
     });
     expect(moved).toBe(false);
     expect(sim.rooms.has('/c')).toBe(false);
-    run(sim, clock, 5, () => sim.building.cols === 3);
-    expect(sim.building.cols).toBe(3);
+    run(sim, clock, 5, () => sim.building.floors === 1);
+    expect(sim.building.floors).toBe(1);
   });
 
   it('abre e fecha ao acaso (inclusive no meio de uma mudança): ninguém se teletransporta e no fim não sobra buraco', () => {
@@ -573,8 +602,8 @@ describe('salas sem buracos', () => {
     expect([...sim.rooms.keys()].sort()).toEqual([...open.keys()].sort());
     expect(slots).toEqual(slots.map((_, i) => i));
     expect([...sim.rooms.values()].some((r) => r.ghost)).toBe(false);
-    run(sim, clock, 20, () => sim.building.cols === 2 + Math.ceil(open.size / 2));
-    expect(sim.building.cols).toBe(2 + Math.ceil(open.size / 2));
+    run(sim, clock, 20, () => sim.building.floors === Math.max(1, Math.ceil(open.size / 8)));
+    expect(sim.building.floors).toBe(Math.max(1, Math.ceil(open.size / 8)));
     expect(maxStep).toBeLessThan(12);
   });
 
@@ -665,7 +694,8 @@ describe('espera de shell', () => {
     sim.applySnapshot(snap(rooms, [agent('ana', '/a', 'shell', { shells: [shell(1000)] })], 2), clock.now);
     expect(ana.mode).toBe('shell');
     let ran = false;
-    run(sim, clock, 60, () => {
+    // the restroom is at the west end and the room past the entertainment wing: a long walk back
+    run(sim, clock, 120, () => {
       if (ana.pose === 'run') ran = true;
       return ana.atSpot === ana.homeSpot && !ana.step && !ana.queue.length;
     });

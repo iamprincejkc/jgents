@@ -15,8 +15,13 @@
 //   GET    /api/crew/sessions?folder=&agent=   CrewSession[]: your Claude Code sessions in that folder
 //   POST   /api/crew/agents/:id/session  {sessionId, mode: resume|fork}: start the agent from one of them
 //   POST   /api/crew/questions/:id       {action: answer|dismiss|allow|deny, answer?, always?}
+//   POST   /api/crew/company             adds the CEO and the departments that are not there yet → 201 {created}
+//   GET    /api/crew/company             {folder, ceo, departments, states, log, outbox, members}: the company, its
+//                                        latest events, the finished work and the members as the office draws them
+//   GET    /api/crew/company/outbox/:name  one finished file: {name, text, bytes, at, truncated}
+// The HQ console (/hq -> /hq.html) and the crew page (/crew -> /crew.html) use these.
 // Bridge (mod/jgents-crew/mcp.mjs; loopback + X-JGENTS-Crew-Token):
-//   POST   /api/crew/bridge/ask | /approve | /handoff,  GET /api/crew/bridge/item/:id/wait?timeout=<s>
+//   POST   /api/crew/bridge/ask | /approve | /handoff | /delegate,  GET /api/crew/bridge/item/:id/wait?timeout=<s>
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import type { CrewEvents } from '../../shared/crew';
@@ -75,9 +80,9 @@ export function createCrewHandler(deps: CrewRouteDeps): (req: IncomingMessage, r
       return sendJson(res, 403, { error: 'bad crew token' });
     }
     const rest = path.slice('/api/crew/bridge'.length);
-    if (method === 'POST' && (rest === '/ask' || rest === '/approve' || rest === '/handoff')) {
+    if (method === 'POST' && (rest === '/ask' || rest === '/approve' || rest === '/handoff' || rest === '/delegate')) {
       const b = await body(req);
-      const r = rest === '/ask' ? c.bridgeAsk(b) : rest === '/approve' ? c.bridgeApprove(b) : c.bridgeHandoff(b);
+      const r = rest === '/ask' ? c.bridgeAsk(b) : rest === '/approve' ? c.bridgeApprove(b) : rest === '/handoff' ? c.bridgeHandoff(b) : c.bridgeDelegate(b);
       return sendJson(res, 'error' in r ? 400 : 201, r);
     }
     const m = /^\/item\/([\w-]{1,64})\/wait$/.exec(rest);
@@ -119,6 +124,23 @@ export function createCrewHandler(deps: CrewRouteDeps): (req: IncomingMessage, r
       req.resume();
       c.clearChat();
       return sendJson(res, 200, { ok: true });
+    }
+    if (path === '/api/crew/company' && method === 'POST') {
+      await body(req).catch(() => ({}));
+      const r = c.createCompany();
+      return sendJson(res, 'error' in r ? 400 : 201, r);
+    }
+    if (path === '/api/crew/company' && isRead) return sendJson(res, 200, c.company());
+    const om = /^\/api\/crew\/company\/outbox\/([^/]{1,200})$/.exec(path);
+    if (om && isRead) {
+      let name = '';
+      try {
+        name = decodeURIComponent(om[1]);
+      } catch {
+        throw new HttpError(400, 'bad file name');
+      }
+      const f = c.outboxFile(name);
+      return f ? sendJson(res, 200, f) : sendJson(res, 404, { error: 'no such file in the outbox' });
     }
     if (path === '/api/crew/folders' && isRead) {
       const folders = await deps.folders().catch(() => []);
@@ -177,8 +199,8 @@ export function createCrewHandler(deps: CrewRouteDeps): (req: IncomingMessage, r
 
   return (req, res, url) => {
     const path = url.pathname;
-    if (path === '/crew' || path === '/crew/') {
-      res.writeHead(302, { Location: '/crew.html' });
+    if (path === '/crew' || path === '/crew/' || path === '/hq' || path === '/hq/') {
+      res.writeHead(302, { Location: path.startsWith('/hq') ? '/hq.html' : '/crew.html' });
       res.end();
       return true;
     }

@@ -19,18 +19,18 @@ export const SEAT_DROP = 4;
 
 export const POSE_FRAMES: Readonly<Record<Pose, number>> = {
   stand: 2, walk: 4, run: 4, sit: 2, type: 4, sleep: 2, drink: 2, use: 2, raise_hand: 2, talk: 2, stretch: 2,
-  read: 2, play: 2, wait: 2, cheer: 2, laugh: 2, game: 2, rps: 2, groom: 2, sulk: 2,
+  read: 2, play: 2, wait: 2, cheer: 2, laugh: 2, game: 2, rps: 2, groom: 2, sulk: 2, sing: 2,
 };
 
 export const POSE_DURATION: Readonly<Record<Pose, number>> = {
   stand: 650, walk: 140, run: 95, sit: 800, type: 120, sleep: 1000, drink: 700, use: 380, raise_hand: 320, talk: 280,
-  stretch: 800, read: 1100, play: 200, wait: 480, cheer: 260, laugh: 190, game: 150, rps: 300, groom: 420, sulk: 1300,
+  stretch: 800, read: 1100, play: 200, wait: 480, cheer: 260, laugh: 190, game: 150, rps: 300, groom: 420, sulk: 1300, sing: 430,
 };
 
 const SEATED_ONLY: ReadonlySet<Pose> = new Set<Pose>(['sit', 'type', 'sleep', 'wait']);
 const NEVER_SEATED: ReadonlySet<Pose> = new Set<Pose>(['walk', 'run', 'stretch', 'play', 'groom']);
 /** Poses que posicionam as mãos (e o item) por conta própria: a lógica genérica de itens não mexe nelas. */
-const OWN_HANDS: ReadonlySet<Pose> = new Set<Pose>(['play', 'drink', 'raise_hand', 'stretch', 'cheer', 'laugh', 'game', 'rps', 'groom', 'sulk']);
+const OWN_HANDS: ReadonlySet<Pose> = new Set<Pose>(['play', 'drink', 'raise_hand', 'stretch', 'cheer', 'laugh', 'game', 'rps', 'groom', 'sulk', 'sing']);
 /** Gestos do jokenpô (a mão vira pedra, papel ou tesoura). */
 const GESTURES: ReadonlySet<HeldItem> = new Set<HeldItem>(['rock', 'paper', 'scissors']);
 
@@ -131,6 +131,8 @@ interface Rig {
   kernelAt: Pt | null;
   /** De frente: braços cruzados desenhados à mão (ver drawCrossedArms); 1 = dedos levantados. */
   crossFront: 0 | 1 | null;
+  /** Billiards cue lying flat for the stroke (profile, pose 'play'); otherwise a held cue stands upright. */
+  cueFlat: boolean;
 }
 
 /** Braços retos ao lado do corpo (frente/costas). */
@@ -169,6 +171,7 @@ function makeRig(req: CharacterFrameRequest, view: HeadView): Rig {
     tapAt: null,
     kernelAt: null,
     crossFront: null,
+    cueFlat: false,
   };
   const side = view === 'side';
 
@@ -260,6 +263,10 @@ function makeRig(req: CharacterFrameRequest, view: HeadView): Rig {
       break;
     }
     case 'play':
+      if (held === 'cue') {
+        cueRig(rig, view, f);
+        break;
+      }
       rig.held = 'paddle';
       if (side) {
         rig.armB = f === 0 ? arm([10, 18], [13, 20], [15, 18]) : arm([10, 18], [8, 19], [5, 18]);
@@ -303,6 +310,9 @@ function makeRig(req: CharacterFrameRequest, view: HeadView): Rig {
     case 'sulk':
       sulkRig(rig, view, f);
       break;
+    case 'sing':
+      singRig(rig, view, f);
+      break;
   }
 
   // Itens segurados: braços e posição do item (exceto poses que já posicionam a mão).
@@ -323,8 +333,53 @@ function makeRig(req: CharacterFrameRequest, view: HeadView): Rig {
       else rig.armB = arm([16, 18], [17, 21], [16, 21]);
     }
   }
-  if (h === 'paddle' && pose !== 'play') rig.held = pose === 'stand' || pose === 'walk' || pose === 'run' ? 'paddle' : 'none';
+  const carried = pose === 'stand' || pose === 'walk' || pose === 'run';
+  if ((h === 'paddle' || h === 'cue') && pose !== 'play') rig.held = carried ? h : 'none';
+  if (h === 'mic' && pose !== 'sing') rig.held = carried ? 'mic' : 'none';
   return rig;
+}
+
+/**
+ * Billiards stroke ('play' + held 'cue'). In profile the player leans over the table: the near hand
+ * is the bridge (still), the far hand draws the cue back (frame 0) and pushes it through (frame 1).
+ * Facing up or down the cue just stands in the hand.
+ */
+function cueRig(rig: Rig, view: HeadView, f: number): void {
+  if (view !== 'side') {
+    rig.armB = arm([16, 18], [17, 21], [16, 21]);
+    return;
+  }
+  const back = f === 0 ? 2 : 0;
+  // bent over the table: head and shoulders forward and down
+  rig.lean = -2;
+  rig.ub += 2;
+  rig.cueFlat = true;
+  rig.armB = arm([10, 18], [7, 20], [4, 21]);
+  rig.armA = arm([12, 18], [14, 19], [15 + back, 19]);
+  rig.itemAt = [1 + back, 21];
+}
+
+/** Karaoke ('sing' + held 'mic'): mic at the mouth, the free arm out (frame 0) and up (frame 1). */
+function singRig(rig: Rig, view: HeadView, f: number): void {
+  rig.mouth = f === 0 ? 'open' : 'wide';
+  if (f === 1) {
+    rig.eyes = 'closed';
+    rig.ub -= 1;
+  }
+  if (view === 'side') {
+    rig.armB = arm([10, 18], [8, 18], [6, 15]);
+    rig.armA = f === 0 ? arm([12, 18], [15, 19], [17, 18]) : arm([12, 18], [14, 15], [15, 11]);
+    rig.itemAt = [4, 12];
+    return;
+  }
+  rig.armA = f === 0 ? arm([6, 18], [3, 18], [1, 16]) : arm([6, 18], [4, 14], [3, 10]);
+  if (view === 'down') {
+    rig.armB = arm([16, 18], [17, 17], [14, 15]);
+    rig.itemAt = [13, 14];
+  } else {
+    rig.armB = arm([16, 18], [17, 16], [15, 14]);
+    rig.itemAt = [14, 12];
+  }
 }
 
 /**
@@ -1307,6 +1362,27 @@ function drawItem(dc: Dc, x: number, y: number): void {
     }
     case 'paddle':
       b.stamp(['.rr.', 'rRrr', 'rrrd', '.rd.', '.h..', '.h..'], x, y, { r: '#d64545', R: '#ef7a6a', d: '#a83232', h: '#6b4a32' }, side);
+      break;
+    case 'cue':
+      if (r.cueFlat) {
+        // Tip (blue chalk) low at the table, maple shaft rising through the bridge hand, red joint
+        // ring, then the darker butt up at the back hand.
+        b.set(x, y + 1, '#7fb3e8');
+        b.set(x + 1, y + 1, '#f4f1ea');
+        b.line(x + 2, y + 1, x + 9, y, '#ead1a0');
+        b.set(x + 10, y, '#b23a3a');
+        b.line(x + 11, y - 1, x + 17, y - 2, '#3b2a20');
+        b.set(x + 12, y - 1, '#5a4030');
+      } else {
+        b.set(x, y - 12, '#7fb3e8');
+        b.set(x, y - 11, '#f4f1ea');
+        b.vline(x, y - 10, y, '#ead1a0');
+        b.set(x, y + 1, '#b23a3a');
+        b.vline(x, y + 2, y + 9, '#3b2a20');
+      }
+      break;
+    case 'mic':
+      b.stamp(['GG', 'gg', '.h', '.h'], x, y, { G: '#a9b1bc', g: '#5a6070', h: '#22252e' });
       break;
     case 'popcorn':
       b.stamp(POPCORN, x, y, POPCORN_PAL);

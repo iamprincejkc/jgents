@@ -11,6 +11,8 @@ const KIND_LABEL: Record<CrewKind, string> = {
   security: 'Security — pentests with Strix',
   general: 'General — questions, research, planning',
   custom: 'Custom',
+  ceo: 'CEO - takes every request, briefs the departments',
+  department: 'Department - works on briefs from the CEO, reports back',
 };
 
 const MODE_LABEL: Record<CrewPermissionMode, string> = {
@@ -26,6 +28,8 @@ const KIND_DEFAULTS: Record<CrewKind, { role: string; description: string; mode:
   security: { role: 'Security tracker: penetration tests with Strix', description: 'Security reviews and authorised penetration tests with Strix.', mode: 'ask' },
   general: { role: 'Concierge: general questions, research and planning', description: 'General questions, research, writing and planning.', mode: 'ask' },
   custom: { role: '', description: '', mode: 'ask' },
+  ceo: { role: 'Runs the company: takes your requests, briefs the departments, answers you', description: 'Every request to the company goes to the CEO, who plans it, briefs the right departments, checks and combines their work and answers once.', mode: 'acceptEdits' },
+  department: { role: '', description: '', mode: 'acceptEdits' },
 };
 
 interface Opts {

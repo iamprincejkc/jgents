@@ -8,6 +8,8 @@
 // - approve    the --permission-prompt-tool: each tool call that needs permission becomes an approval card on the
 //              board; returns {"behavior":"allow","updatedInput":...} or {"behavior":"deny","message":...}.
 // - handoff    gives a task to another Crew agent (it runs in that agent's own session, in parallel).
+// - delegate   briefs another agent and gets its report back: when everyone briefed in this turn has finished,
+//              their reports arrive together as the caller's next message (the company: the CEO and departments).
 //
 // Pure Node 22+, no dependencies. Talks only to 127.0.0.1:<JGENTS_PORT>, authenticated with JGENTS_CREW_TOKEN (a
 // random secret JGENTS creates at boot). Any error is returned to the agent as tool text; the server never crashes
@@ -64,6 +66,22 @@ const TOOLS = [
       properties: {
         agent: { type: 'string', description: 'The id of the agent to hand off to.' },
         task: { type: 'string', description: 'What that agent should do, with all needed context.' },
+      },
+      required: ['agent', 'task'],
+    },
+  },
+  {
+    name: 'delegate',
+    description:
+      'Brief another agent of the crew (a department) and get its report back. It works in its own session and ' +
+      'folder, in parallel with anyone else you brief. When everyone you briefed in this turn has finished, all ' +
+      'their reports arrive together as your next message, so end your turn after briefing. Write each brief so it ' +
+      'stands on its own: goal, context, constraints, the deliverable and its format.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agent: { type: 'string', description: 'The id of the agent to brief (e.g. "marketing").' },
+        task: { type: 'string', description: 'The brief, self-contained.' },
       },
       required: ['agent', 'task'],
     },
@@ -145,7 +163,15 @@ async function handoff(args) {
   return text(`Handed off to ${r.name ?? agent}. It is working on it in its own session.`);
 }
 
-const HANDLERS = { ask_user: askUser, approve, handoff };
+async function delegate(args) {
+  const agent = String(args?.agent ?? '').trim();
+  const task = String(args?.task ?? '').trim();
+  if (!agent || !task) return { ...text('delegate needs agent and task.'), isError: true };
+  const r = await call('/delegate', { from: AGENT, run: RUN, agent, task });
+  return text(`Briefed ${r.name ?? agent}. Its report comes back to you with the others' once everyone you briefed has finished; end your turn when you are done briefing.`);
+}
+
+const HANDLERS = { ask_user: askUser, approve, handoff, delegate };
 
 function send(msg) {
   process.stdout.write(`${JSON.stringify(msg)}\n`);

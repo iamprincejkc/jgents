@@ -10,6 +10,8 @@ import type { Sim } from './sim/sim';
 const KEYS_TICK_MS = 160;
 /** Período (ms) de uma ida da bolinha do pingue-pongue (o mesmo do desenho). */
 const PINGPONG_PERIOD = 1_100;
+/** Same crossing time as the drawn pickleball (render/fun-fx.ts). */
+const PICKLEBALL_PERIOD_MS = 1_450;
 
 interface ViewRect {
   x0: number;
@@ -85,7 +87,7 @@ export class SoundCues {
     const alive = new Set<number>();
     for (const g of this.sim.social.gatherings) {
       if (g.phase !== 'run') continue;
-      if (g.kind !== 'pingpong' && g.kind !== 'arcade') continue;
+      if (g.kind !== 'pingpong' && g.kind !== 'arcade' && g.kind !== 'pickleball' && g.kind !== 'billiards') continue;
       let x = 0;
       let y = 0;
       let k = 0;
@@ -108,6 +110,21 @@ export class SoundCues {
         const prev = this.rally.get(g.id);
         this.rally.set(g.id, seg);
         if (prev !== undefined && prev !== seg) emit({ kind: seg % 2 === 0 ? 'pingpong' : 'table', gain: near, pan: this.pan(x, view) });
+      } else if (g.kind === 'pickleball') {
+        alive.add(g.id);
+        // in step with the drawn ball: the paddle hit at each end, the bounce on the far side
+        const t = (now - g.startAt) % PICKLEBALL_PERIOD_MS;
+        const seg = Math.floor((now - g.startAt) / PICKLEBALL_PERIOD_MS) * 2 + (t >= PICKLEBALL_PERIOD_MS * 0.74 ? 1 : 0);
+        const prev = this.rally.get(g.id);
+        this.rally.set(g.id, seg);
+        if (prev !== undefined && prev !== seg) emit({ kind: seg % 2 === 0 ? 'pingpong' : 'table', gain: near * 0.9, pan: this.pan(x, view) });
+      } else if (g.kind === 'billiards') {
+        alive.add(g.id);
+        // the click of each shot
+        const n = g.shot?.n ?? 0;
+        const prev = this.rally.get(g.id);
+        this.rally.set(g.id, n);
+        if (prev !== undefined && prev !== n) emit({ kind: 'table', gain: near * 0.8, pan: this.pan(x, view) });
       } else if (now >= this.nextArcadeAt) {
         this.nextArcadeAt = now + 500 + this.rng() * 900;
         emit({ kind: 'arcade', gain: near * 0.8, pan: this.pan(x, view) });

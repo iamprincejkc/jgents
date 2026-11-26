@@ -1,6 +1,6 @@
 /* Interface do JGENTS: painéis escuros translúcidos sobre o escritório em pixel art.
-   Tipografia: logotipo em pixels (SVG); Pixelify Sans só em rótulos fixos de painel sem "C" maiúsculo nem
-   dígitos (na Pixelify o "C" parece "O" e o "5" parece "S"); system-ui para o corpo, nomes, letras de conta e números.
+   Typography: the logo in pixels (SVG); Silkscreen (crisp pixel font, drawn on an 8 px grid, so used at 16 px
+   or 24 px) for titles, project names and the top bar numbers; Inter for everything else.
    Identidade: detalhes "em pixel" (pontos de status quadrados, barras segmentadas de uso, ícones em pixels). */
 
 .ui-root {
@@ -29,8 +29,8 @@
   --lv-warn: #ffb547;
   --lv-crit: #ff6b6b;
 
-  --font-px: 'Pixelify Sans', system-ui, sans-serif;
-  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-px: 'Silkscreen', system-ui, sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
   --radius: 10px;
@@ -262,7 +262,8 @@
 .ui-btn--primary {
   height: 36px;
   padding: 0 18px;
-  font-family: var(--font-px);
+  font-family: var(--font-ui);
+  font-weight: 600;
   font-size: 15px;
   letter-spacing: 0.02em;
   background: #2f7fd1;
@@ -859,7 +860,7 @@
 }
 
 .ui-counter__value {
-  font: 750 18px/1 var(--font-ui);
+  font: 400 16px/1 var(--font-px);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   color: #f3f6fc;
@@ -1450,7 +1451,7 @@
 }
 
 .ui-side__title h2 {
-  font: 600 15px/1 var(--font-px);
+  font: 400 16px/1.1 var(--font-px);
   letter-spacing: 0.01em;
 }
 
@@ -1615,7 +1616,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: 650 13.5px/1.25 var(--font-ui);
+  font: 400 16px/1.1 var(--font-px);
+  text-transform: none;
 }
 
 .ui-room__count {
@@ -1891,7 +1893,7 @@
 
 .ui-feed__title h2 {
   flex: none;
-  font: 600 13.5px/1 var(--font-px);
+  font: 400 16px/1.1 var(--font-px);
   letter-spacing: 0.01em;
 }
 
@@ -2035,7 +2037,7 @@
 }
 
 .ui-drawer__kind {
-  font: 500 12.5px/1 var(--font-px);
+  font: 600 12px/1 var(--font-ui);
   color: var(--ui-muted);
   letter-spacing: 0.02em;
 }
@@ -2194,7 +2196,7 @@
 
 .ui-alert__title {
   display: block;
-  font: 600 14px/1.2 var(--font-px);
+  font: 400 16px/1.1 var(--font-px);
   color: var(--st-waiting);
   margin-bottom: 2px;
 }
@@ -2221,7 +2223,7 @@
   padding: 1px 6px;
   border-radius: 5px;
   background: rgba(255, 181, 71, 0.18);
-  font: 500 11px/1.4 var(--font-px);
+  font: 600 11px/1.4 var(--font-ui);
   color: var(--st-waiting);
 }
 
@@ -2277,7 +2279,7 @@
 }
 
 .ui-sec__title {
-  font: 600 14px/1 var(--font-px);
+  font: 400 16px/1.1 var(--font-px);
   letter-spacing: 0.01em;
 }
 
@@ -2697,7 +2699,7 @@
 
 .ui-set-group h3 {
   margin-bottom: 4px;
-  font: 500 12.5px/1.2 var(--font-px);
+  font: 400 16px/1.1 var(--font-px);
   color: var(--ui-muted);
   letter-spacing: 0.02em;
 }
@@ -2730,6 +2732,11 @@
 .ui-set__hint {
   font-size: 11.5px;
   color: var(--ui-muted);
+}
+
+/* a folder path breaks anywhere rather than widening the popover */
+.ui-set__hint--path {
+  overflow-wrap: anywhere;
 }
 
 /* Sobre: versão em uso, estado da verificação no GitHub e a versão nova (com o jeito de atualizar). */
@@ -3282,7 +3289,7 @@
 }
 
 .ui-empty__title {
-  font: 600 22px/1.15 var(--font-px);
+  font: 400 24px/1.15 var(--font-px);
 }
 
 .ui-empty__text {
@@ -4503,7 +4510,7 @@
 }
 
 .ui-term-cta__label {
-  font: 500 14px/1 var(--font-px);
+  font: 600 13px/1 var(--font-ui);
   letter-spacing: 0.02em;
 }
 
@@ -4605,7 +4612,7 @@
 
 .ui-term__kind {
   flex: none;
-  font: 500 13.5px/1 var(--font-px);
+  font: 600 12.5px/1 var(--font-ui);
   letter-spacing: 0.02em;
   color: var(--ui-muted);
 }
@@ -4995,7 +5002,7 @@ button.ui-term__think:hover,
   border-radius: 6px;
   background: #2f7fd1;
   border: 1px solid #58a6f2;
-  font: 500 13px/1 var(--font-px);
+  font: 600 13px/1 var(--font-ui);
   letter-spacing: 0.02em;
   white-space: nowrap;
   color: #fff;
@@ -5907,7 +5914,7 @@ html.is-replay #world {
 }
 
 .ui-lapse-badge__label {
-  font: 700 15px/1 var(--font-px);
+  font: 400 16px/1.1 var(--font-px);
   letter-spacing: 0.14em;
 }
 
@@ -6257,7 +6264,7 @@ html.is-replay #world {
 
 .ui-perm__title {
   display: block;
-  font: 600 14px/1.2 var(--font-px);
+  font: 400 16px/1.1 var(--font-px);
   color: var(--st-waiting);
   margin-bottom: 2px;
 }
@@ -7749,7 +7756,7 @@ html.is-replay #world {
 .ui-spawn__label {
   display: block;
   margin: 8px 0 4px;
-  font: 500 12.5px/1.2 var(--font-px);
+  font: 600 12.5px/1.2 var(--font-ui);
   color: var(--ui-muted);
 }
 
@@ -7913,7 +7920,7 @@ html.is-replay #world {
 .ui-spawn__thumb--doc {
   display: grid;
   place-items: center;
-  font: 600 9px/1 var(--font-px);
+  font: 700 9px/1 var(--font-ui);
   color: var(--ui-muted);
   border: 1px solid var(--ui-line-strong);
 }
@@ -8418,7 +8425,7 @@ html.is-replay #world {
 }
 
 .ui-pty__away strong {
-  font: 500 16px/1.2 var(--font-px);
+  font: 400 16px/1.1 var(--font-px);
 }
 
 .ui-pty__away p {
@@ -8638,7 +8645,7 @@ html.is-replay #world {
   place-items: center;
   align-content: center;
   gap: 2px;
-  font: 700 10px/1 var(--font-px);
+  font: 700 10px/1 var(--font-ui);
   color: var(--ui-muted);
 }
 
@@ -8666,7 +8673,7 @@ html.is-replay #world {
   border-radius: 6px;
   background: rgba(124, 200, 255, 0.16);
   color: #cfe9ff;
-  font: 700 12px/1 var(--font-px);
+  font: 700 12px/1 var(--font-ui);
 }
 
 .ui-deliv-initial--sm { width: 22px; height: 22px; }
@@ -8756,7 +8763,7 @@ html.is-replay #world {
 }
 
 .ui-deliv-modal__label {
-  font: 600 11px/1 var(--font-px);
+  font: 600 11px/1 var(--font-ui);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ui-faint);
@@ -9055,3 +9062,187 @@ html.is-replay #world {
 /* Crew chat button (top bar): badge with the questions waiting on the crew's board. */
 .ui-btn-crew { position: relative; }
 .ui-btn-crew__badge { position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #fac665; color: #12151d; font: 700 10px/16px system-ui, sans-serif; text-align: center; pointer-events: none; }
+
+/* ---- Legendary creature encounter card (ui/legend-card.ts) */
+.ui-wild {
+  --wild: #9ef9ff;
+  width: min(360px, calc(100vw - 32px));
+}
+
+.ui-wild__banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 10px 10px 16px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--wild) 26%, transparent), transparent 80%);
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.ui-wild__kicker {
+  font: 700 11px/1.2 var(--font-ui);
+  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--wild);
+}
+
+.ui-wild__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 168px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 58%, color-mix(in srgb, var(--wild) 34%, transparent), transparent 60%),
+    linear-gradient(180deg, #1d2a3f 0%, #22344a 55%, #2c4a3a 56%, #24402f 100%);
+}
+
+/* the grass platform the creature stands on */
+.ui-wild__platform {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  width: 190px;
+  height: 34px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 40%, #6fae5a 0%, #4f8a44 55%, #3a6a36 100%);
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.18);
+}
+
+.ui-wild__sprite {
+  position: relative;
+  z-index: 1;
+  width: 168px;
+  height: 136px;
+  margin-bottom: 8px;
+  image-rendering: pixelated;
+  animation: ui-wild-bob 1.8s ease-in-out infinite;
+}
+
+.ui-wild[data-variant='shiny'] .ui-wild__stage::after,
+.ui-wild[data-variant='metallic'] .ui-wild__stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.16) 48%, transparent 60%);
+  background-size: 260% 100%;
+  animation: ui-wild-shine 2.8s linear infinite;
+  pointer-events: none;
+}
+
+.ui-wild__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+
+.ui-wild__title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ui-wild__title h2 {
+  margin: 0;
+  font: 700 24px/1 var(--font-px);
+  color: var(--ui-text);
+}
+
+.ui-wild__lv {
+  font: 400 16px/1.1 var(--font-px);
+  color: var(--ui-muted);
+}
+
+.ui-wild__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ui-wild__chip {
+  --chip: #6b7280;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font: 700 11px/1 var(--font-ui);
+  color: #fff;
+  background: var(--chip);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.ui-wild__chip--variant {
+  color: #1d1530;
+  text-shadow: none;
+  background: linear-gradient(90deg, #ffd36b, #ff8ad8, #7cd8ff);
+}
+
+.ui-wild__chip--new {
+  color: #0b1220;
+  text-shadow: none;
+  background: var(--ui-accent);
+}
+
+.ui-wild__blurb {
+  margin: 0;
+  font: 13px/1.5 var(--font-ui);
+  color: var(--ui-text);
+}
+
+.ui-wild__dex {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-line);
+}
+
+.ui-wild__count {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font: 12px/1.3 var(--font-ui);
+  color: var(--ui-muted);
+}
+
+.ui-wild__roster {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.ui-wild__mini {
+  width: 100%;
+  aspect-ratio: 42 / 34;
+  border-radius: 6px;
+  background: var(--ui-bg-soft);
+  image-rendering: pixelated;
+}
+
+.ui-wild__mini.is-current {
+  outline: 2px solid var(--wild);
+  outline-offset: -2px;
+}
+
+@keyframes ui-wild-bob {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes ui-wild-shine {
+  from {
+    background-position: 130% 0;
+  }
+  to {
+    background-position: -130% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-wild__sprite,
+  .ui-wild[data-variant] .ui-wild__stage::after {
+    animation: none;
+  }
+}

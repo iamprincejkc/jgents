@@ -24,6 +24,8 @@ export interface ServerConfig {
   claudeDirs: string[];
   /** Onde o JGENTS guarda o próprio estado (nomes persistidos). */
   dataDir: string;
+  /** The owner's creature pack (images that roam the grounds): JGENTS_CREATURES_DIR or <dataDir>/creatures. */
+  creaturesDir: string;
   /**
    * Pasta com o uso capturado pelo statusline do Claude Code (scripts/statusline-tap.mjs):
    * JGENTS_USAGE_DIR ou ~/.jgents/usage. No Docker, o docker-up monta essa pasta em /usage.
@@ -157,6 +159,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
   const host = env.JGENTS_HOST?.trim() || '127.0.0.1';
   const pkg = readPackage(rootDir);
   const remote = parseRemoteConfig(env, inDocker);
+  const dataDir = resolve(env.JGENTS_DATA_DIR?.trim() || (inDocker ? '/data' : join(home, '.jgents')));
   return {
     port: Number.isFinite(port) && port > 0 && port < 65536 ? port : 4747,
     host,
@@ -165,7 +168,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
     inDocker,
     home,
     claudeDirs: discoverClaudeDirs(env, home),
-    dataDir: resolve(env.JGENTS_DATA_DIR?.trim() || (inDocker ? '/data' : join(home, '.jgents'))),
+    dataDir,
+    creaturesDir: resolve(env.JGENTS_CREATURES_DIR?.trim() || join(dataDir, 'creatures')),
     usageDir: resolve(env.JGENTS_USAGE_DIR?.trim() || join(home, '.jgents', 'usage')),
     allowedHosts: parseAllowedHosts(env.JGENTS_ALLOWED_HOSTS),
     terminal: terminalOffReason(env, host, inDocker) === undefined,

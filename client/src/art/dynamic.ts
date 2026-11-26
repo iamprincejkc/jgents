@@ -300,6 +300,52 @@ export function drawScreen(ctx: Ctx, r: Rect, mode: ScreenMode, t: number, seed:
       }
       break;
     }
+    case 'karaoke':
+      drawKaraoke(ctx, x, y, w, h, t, s);
+      break;
+  }
+}
+
+/** Length of one karaoke lyric line (ms): the highlight sweeps it once, then the next line starts. */
+const KARAOKE_LINE_MS = 3600;
+
+/**
+ * Karaoke video: drifting colour bands, an equaliser along the bottom, two lyric bars (abstract
+ * "words", never real lyrics) with the sung part turning gold, and notes floating up.
+ */
+function drawKaraoke(ctx: Ctx, x: number, y: number, w: number, h: number, t: number, s: number): void {
+  const bands = ['#3b1f5e', '#55287a', '#2c3a7c', '#1f4a6e', '#4a2470'];
+  for (let i = 0; i < h; i++) fill(ctx, x, y + i, w, 1, bands[(Math.floor(i / 3 + t / 650) + (s % 5)) % bands.length]);
+  const eq = Math.max(2, Math.floor(h / 4));
+  for (let c = 0; c < w; c += 3) {
+    const v = 1 + (h32(Math.floor(t / 170), c + s) % eq);
+    fill(ctx, x + c, y + h - v, 2, v, c % 6 ? 'rgba(255,138,216,0.8)' : 'rgba(124,216,255,0.8)');
+  }
+  const lineNo = Math.floor(t / KARAOKE_LINE_MS);
+  const p = frac(t / KARAOKE_LINE_MS);
+  const maxLen = Math.max(6, w - 8);
+  for (let r = 0; r < 2; r++) {
+    const ly = y + Math.floor(h * 0.28) + r * 5;
+    const len = Math.floor(maxLen * (0.65 + (h32(lineNo + r, s) % 30) / 100));
+    const lx = x + Math.floor((w - len) / 2);
+    fill(ctx, lx - 2, ly - 1, len + 4, 3, 'rgba(10,10,24,0.55)');
+    let cx = lx;
+    let wi = 0;
+    while (cx < lx + len) {
+      const ww = Math.min(2 + (h32(wi, lineNo * 7 + r + s) % 4), lx + len - cx);
+      const sung = r === 0 && cx + ww <= lx + len * p;
+      fill(ctx, cx, ly, ww, 1, sung ? '#ffe066' : '#f4f1ff');
+      cx += ww + 1;
+      wi++;
+    }
+  }
+  for (let n = 0; n < 3; n++) {
+    const ph = frac(t / 2300 + n / 3 + (s % 7) / 7);
+    const nx = x + 2 + (h32(n, s + Math.floor(t / 2300 + n / 3)) % Math.max(1, w - 5));
+    const ny = y + h - 4 - Math.floor(ph * (h - 6));
+    const c = ['#ffe066', '#7cd8ff', '#ff8ad8'][n];
+    fill(ctx, nx, ny, 2, 1, c);
+    fill(ctx, nx + 1, ny - 3, 1, 3, c);
   }
 }
 

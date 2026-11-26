@@ -8,6 +8,7 @@ import type { UiPrefs } from './prefs';
 import { SoundSettingsGroup } from './settings-sound';
 import type { SoundControl } from './sound';
 import { AboutGroup } from './version';
+import { fetchPackInfo } from '../world/creature-pack';
 import { LOCALE_STORAGE_KEY, LOCALES, normalizeLocale, tr, type Locale } from '../../../shared/i18n';
 
 type LanguageChoice = 'auto' | Locale;
@@ -87,6 +88,9 @@ export class SettingsPopover implements UiComponent {
   private liveliness: ReturnType<typeof segmented<UiPrefs['liveliness']>>;
   private daylight: ReturnType<typeof segmented<UiPrefs['daylight']>>;
   private theme: ReturnType<typeof segmented<UiPrefs['theme']>>;
+  private creatures: ReturnType<typeof segmented<UiPrefs['creatures']>>;
+  /** Where the creature pack is and what is in it (read from the server when the popover opens). */
+  private packHint: HTMLElement;
   private language: ReturnType<typeof segmented<LanguageChoice>>;
   private soundGroup: SoundSettingsGroup;
   private demoGroup: HTMLElement;
@@ -144,6 +148,17 @@ export class SettingsPopover implements UiComponent {
     );
     this.theme.row.append(h('span', { class: 'ui-set__hint', text: tr('Automático: Halloween em outubro e Natal de 1º de novembro a 26 de dezembro; no resto do ano, o visual original. Nenhum: sempre o original.') }));
     this.soundGroup = new SoundSettingsGroup(ctx, sound);
+    this.creatures = segmented<UiPrefs['creatures']>(
+      tr('Criaturas que passeiam'),
+      [
+        ['builtin', tr('Originais')],
+        ['pack', tr('Seu pacote')],
+        ['both', tr('Ambos')],
+      ],
+      (v) => ctx.updatePrefs({ creatures: v }),
+    );
+    this.packHint = h('span', { class: 'ui-set__hint ui-set__hint--path' });
+    this.creatures.row.append(this.packHint);
 
     // Nomes dos idiomas sempre na própria língua, para quem não entende o idioma atual achar o seu.
     this.language = segmented<LanguageChoice>(
@@ -196,6 +211,8 @@ export class SettingsPopover implements UiComponent {
         this.bubbles.row,
         this.liveliness.row,
         this.daylight.row,
+        sw('legends', tr('Criaturas lendárias'), tr('Lendários raros passeiam pelo jardim. Clique em um para ver a ficha dele.'), flip('legends')),
+        this.creatures.row,
       ),
       h(
         'div',
@@ -214,6 +231,21 @@ export class SettingsPopover implements UiComponent {
       this.syncRootClass();
       if (this.isOpen) this.render();
     });
+  }
+
+  /** Tells where the creature pack lives and what it holds (and any problem with its files). */
+  private async refreshPack(): Promise<void> {
+    const info = await fetchPackInfo();
+    const n = info?.creatures.length ?? 0;
+    const folder = info?.folder;
+    let text: string;
+    if (!info) text = tr('Seu pacote: imagens suas, numa pasta do JGENTS, que passeiam pelo jardim.');
+    else if (!n && folder) text = tr('Seu pacote está vazio. Coloque imagens PNG, WebP ou GIF em {0}: o nome do arquivo vira o nome da criatura. Enquanto isso, passeiam as originais.', [folder]);
+    else if (!n) text = tr('Seu pacote está vazio; enquanto isso, passeiam as originais.');
+    else if (folder) text = tr('No seu pacote: {0}. Pasta: {1}. Um creatures.json lá dentro ajusta nome, voo e tamanho (veja o README.txt).', [n, folder]);
+    else text = tr('No seu pacote: {0}.', [n]);
+    if (info?.warnings.length) text += ` ${tr('Atenção: {0}', [info.warnings.slice(0, 3).join(' · ')])}`;
+    setText(this.packHint, text);
   }
 
   get isOpen(): boolean {
@@ -276,6 +308,8 @@ export class SettingsPopover implements UiComponent {
     this.liveliness.set(p.liveliness);
     this.daylight.set(p.daylight);
     this.theme.set(p.theme);
+    this.creatures.set(p.creatures);
+    void this.refreshPack();
     this.language.set(savedLanguage());
     this.soundGroup.render();
     setHidden(this.demoGroup, this.ctx.store.mock || access().remote);

@@ -8,6 +8,7 @@ import { hash32 } from '../../../shared/hash';
 import {
   TILE,
   type Appearance,
+  type DecalKind,
   type ArtModule,
   type CharacterFrameRequest,
   type Doorway,
@@ -31,6 +32,8 @@ import { renderIcon } from './icons';
 import { CHUNK_PX, floorChunk } from './surfaces/floor';
 import { WALL_CAP_H, WALL_FACE_H, capColor, southWallTile, wallFaceTile } from './surfaces/walls';
 import { renderRug } from './surfaces/rug';
+import { renderDecal } from './surfaces/decal';
+import { creatureFrames, renderCreature, type CreatureMotion, type CreatureSpecies, type CreatureVariant } from './creatures';
 import { roomTheme as roomThemePure } from './theme';
 
 export * from './api';
@@ -75,6 +78,8 @@ const floorCache = new Cache<HTMLCanvasElement>(1500);
 const iconCache = new Cache<Sprite>(64);
 const avatarCache = new Cache<HTMLCanvasElement>(2000);
 const rugCache = new Cache<HTMLCanvasElement>(512);
+const decalCache = new Cache<HTMLCanvasElement>(64);
+const creatureCache = new Cache<Sprite>(1024);
 
 const appearanceKeys = new WeakMap<Appearance, string>();
 function keyOf(a: Appearance): string {
@@ -196,6 +201,25 @@ export function drawRug(ctx: CanvasRenderingContext2D, x: number, y: number, w: 
   const rh = Math.max(4, Math.round(h));
   const key = `${rw}|${rh}|${color}|${seed}`;
   const c = rugCache.get(key, () => toCanvas(renderRug(rw, rh, color, seed)));
+  ctx.drawImage(c, Math.round(x), Math.round(y));
+}
+
+/** One frame of a legendary creature (see creatures.ts); `flip` mirrors it to face right. */
+export function creatureSprite(species: CreatureSpecies, variant: CreatureVariant, motion: CreatureMotion, frame: number, flip = false): Sprite {
+  const n = creatureFrames(species, motion);
+  const f = ((Math.floor(frame) % n) + n) % n;
+  return creatureCache.get(`${species}|${variant}|${motion}|${f}|${flip ? 1 : 0}`, () => {
+    const s = renderCreature(species, variant, motion, f);
+    if (!flip) return toSprite(s);
+    return toSprite({ buf: s.buf.flipped(), ax: s.buf.w - s.ax, ay: s.ay });
+  });
+}
+
+/** Floor markings (court lines, stage, dance floor) in a px-of-world rectangle; see surfaces/decal.ts. */
+export function drawDecal(ctx: CanvasRenderingContext2D, kind: DecalKind, x: number, y: number, w: number, h: number, seed: number): void {
+  const dw = Math.max(1, Math.round(w));
+  const dh = Math.max(1, Math.round(h));
+  const c = decalCache.get(`${kind}|${dw}|${dh}|${seed}`, () => toCanvas(renderDecal(kind, dw, dh, seed)));
   ctx.drawImage(c, Math.round(x), Math.round(y));
 }
 
@@ -328,6 +352,8 @@ const _contract: ArtModule = {
   roomTheme,
   iconSprite,
   avatarCanvas,
+  drawDecal,
+  creatureSprite,
 };
 void _contract;
 

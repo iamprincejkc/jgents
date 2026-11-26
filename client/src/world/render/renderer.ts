@@ -5,10 +5,13 @@ import { TILE, type ArtModule, type CharacterFrameRequest, type IconName, type S
 import type { SeasonalTheme, WorldOptions } from '../api';
 import type { WorldAssets } from '../assets';
 import type { Camera } from '../camera';
-import { BUILDING_H, COL_W, CORE_COLS, CORRIDOR_Y } from '../constants';
-import { layoutExterior, slotShell, type ExteriorLayout, type SlotShell } from '../layout/exterior';
-import { slotAt } from '../layout/geometry';
-import type { ExteriorProp } from '../layout/types';
+import { CORE_COLS, CORRIDOR_Y, HOUSE_W, houseH } from '../constants';
+import { layoutExterior, type ExteriorLayout } from '../layout/exterior';
+import { KARAOKE_ID } from '../layout/fun';
+import { CreatureCatalog } from '../creature-catalog';
+import { Legends, type Legend } from '../legends';
+import { slotAt, slotRect } from '../layout/geometry';
+import type { ExteriorProp, FloorPatch } from '../layout/types';
 import { screenModeFor } from '../sim/behavior';
 import type { Character } from '../sim/character';
 import type { RoomState } from '../sim/room-state';
@@ -18,11 +21,13 @@ import { buildAnim, furnitureScale, NO_ANIM, sweepDelay, type BuildAnim } from '
 import { daylightModeOf, parseHourParam } from './daylight';
 import { RoomFxRenderer } from './github-fx';
 import { Lighting } from './lighting';
+import { drawDiscoBall, drawKaraokeLights, drawPickleball, drawScoreboard, PoolTableFx } from './fun-fx';
+import { drawFlyerShadow, drawLegend, drawLegendFx } from './legend-fx';
 import { Particles } from './particles';
 import { carSprite, propSprite, shadowSprite } from './props';
 import { countBadge, fallbackIcon } from './shell-sprites';
 import { decorateElevator, drawSeasonalLights, drawSeasonalWindow, seasonalCostume, seasonalFurniture } from './seasonal';
-import { buildAreaVis, furnitureSprites, opaqueBounds, paintShell, toWallVis, WALL_MARGIN, wallItemOrigin, wallSprites, type AreaVis, type FurnVis, type WallVis } from './scene';
+import { buildAreaVis, furnitureSprites, opaqueBounds, paintShell, WALL_MARGIN, wallItemOrigin, wallSprites, type AreaVis, type FurnVis, type WallVis } from './scene';
 
 const enum K {
   FurnBase,
@@ -30,12 +35,16 @@ const enum K {
   Char,
   Prop,
   Car,
+  /** Balls on the pool table, drawn right after the table. */
+  Balls,
+  /** A legendary creature walking the grounds. */
+  Legend,
 }
 
 interface Ent {
   k: K;
   y: number;
-  ref: FurnVis | Character | ExteriorProp | Car | null;
+  ref: FurnVis | Character | ExteriorProp | Car | Legend | null;
   area: AreaVis | null;
   scale: number;
 }
@@ -80,12 +89,10 @@ export class Renderer {
   readonly areas = new Map<string, AreaVis>();
   readonly heads = new Map<string, HeadInfo>();
   exterior: ExteriorLayout;
-  shells: SlotShell[] = [];
-  shellWindows: WallVis[] = [];
   private base: HTMLCanvasElement | null = null;
   private baseX = 0;
   private baseY = 0;
-  private baseCols = -1;
+  private baseFloors = -1;
   private layoutVersion = -1;
   private assetsVersion = 0;
   private builtAssetsVersion = 0;
@@ -99,6 +106,11 @@ export class Renderer {
   readonly particles = new Particles();
   /** Festa e alarme das salas (eventos do GitHub). */
   private readonly roomFx = new RoomFxRenderer();
+  private readonly poolFx = new PoolTableFx();
+  /** Legendary creatures roaming the grounds (decoration, like the cars). */
+  readonly legends: Legends;
+  /** The creature under the mouse (its name tag is shown). */
+  legendHover: number | null = null;
   /** dt do frame atual (s), para as partículas emitidas durante o desenho. */
   private dt = 0;
   private iconCount = 0;
@@ -122,9 +134,11 @@ export class Renderer {
     private readonly art: ArtModule,
     private readonly sim: Sim,
     private readonly camera: Camera,
+    creatures: CreatureCatalog = new CreatureCatalog(),
   ) {
+    this.legends = new Legends(Math.random, creatures);
     this.ctx = canvas.getContext('2d', { alpha: false })!;
-    this.exterior = layoutExterior(sim.building.cols);
+    this.exterior = layoutExterior(sim.building.floors);
     this.lighting = new Lighting(art, sim);
   }
 
@@ -141,11 +155,11 @@ export class Renderer {
     const themeChanged = theme !== this.theme;
     this.theme = theme;
     const assetsChanged = this.builtAssetsVersion !== this.assetsVersion || themeChanged;
-    if (this.baseCols !== sim.building.cols || assetsChanged) this.buildBase();
+    if (this.baseFloors !== sim.building.floors || assetsChanged) this.buildBase();
     if (this.layoutVersion !== sim.layoutVersion || assetsChanged) {
       this.layoutVersion = sim.layoutVersion;
       const want = new Set<string>();
-      for (const a of [...sim.building.core, sim.building.corridor]) {
+      for (const a of [...sim.building.core, ...sim.building.halls, ...sim.building.amenities]) {
         want.add(a.id);
         const cur = this.areas.get(a.id);
         if (!cur || cur.layout !== a || assetsChanged) this.areas.set(a.id, buildAreaVis(this.art, a, undefined, this.assets, theme));
@@ -173,9 +187,10 @@ export class Renderer {
 
   /** Camada base: área externa, pátios dos slots e fechamentos do corredor. */
   private buildBase(): void {
-    const cols = this.sim.building.cols;
-    this.baseCols = cols;
-    this.exterior = layoutExterior(cols);
+    const floors = this.sim.building.floors;
+    this.baseFloors = floors;
+    this.exterior = layoutExterior(floors);
+    this.legends.layout(floors);
     const b = this.exterior.bounds;
     this.baseX = b.x * TILE;
     this.baseY = b.y * TILE;
@@ -190,16 +205,18 @@ export class Renderer {
     const ly = this.exterior.streetY + Math.round(this.exterior.streetH / 2) - 1;
     ctx.fillStyle = 'rgba(255,236,170,0.75)';
     for (let x = this.baseX + 4; x < this.baseX + c.width; x += 24) ctx.fillRect(x, ly, 12, 2);
-    this.shells = [];
-    this.shellWindows = [];
-    for (let col = CORE_COLS; col < cols; col++) {
+    // a plain subfloor under every project spot: a room going up (or coming down) shows it, not grass
+    const sub: FloorPatch[] = [];
+    for (let f = 1; f <= floors; f++) {
       for (const side of ['north', 'south'] as const) {
-        const sh = slotShell(slotAt(col, side), col === cols - 1);
-        this.shells.push(sh);
-        paintShell(this.art, ctx, sh.floors, sh.walls);
-        for (const w of sh.windows) this.shellWindows.push(toWallVis(w, `shell:${sh.slot}`));
+        for (let col = 0; col < CORE_COLS; col++) {
+          const slot = slotAt(f, col, side);
+          const r = slotRect(slot);
+          sub.push({ kind: 'wood', x: r.x * TILE, y: r.y * TILE, w: r.w * TILE, h: r.h * TILE, seed: 700 + slot });
+        }
       }
     }
+    paintShell(this.art, ctx, sub, []);
     this.desaturate(ctx);
     // fundo além da área desenhada: a própria grama (amostra espelhada 2x2, sem emendas), já no
     // tom da borda da vinheta
@@ -246,7 +263,7 @@ export class Renderer {
       this.grass = null;
       this.clearColor = '#6f9a5a';
     }
-    this.finishBase(ctx, cols);
+    this.finishBase(ctx, floors);
     this.base = c;
   }
 
@@ -265,7 +282,7 @@ export class Renderer {
   }
 
   /** Acabamento da camada externa: bordas levemente mais escuras (vinheta) e o capacho da entrada. */
-  private finishBase(ctx: CanvasRenderingContext2D, cols: number): void {
+  private finishBase(ctx: CanvasRenderingContext2D, floors: number): void {
     const b = this.exterior.bounds;
     const x0 = b.x * TILE;
     const y0 = b.y * TILE;
@@ -274,7 +291,8 @@ export class Renderer {
     ctx.save();
     // vinheta: escurece com a distância ao prédio e chega ao tom da grama "de fora" exatamente na
     // borda da área desenhada (máscara de 1 px por tile, ampliada com suavização)
-    const bwT = cols * COL_W;
+    const bwT = HOUSE_W;
+    const bhT = houseH(floors);
     const smooth = (a: number, z: number, v: number) => {
       const t = Math.max(0, Math.min(1, (v - a) / Math.max(1e-6, z - a)));
       return t * t * (3 - 2 * t);
@@ -290,7 +308,7 @@ export class Renderer {
           const wx = b.x + tx + 0.5;
           const wy = b.y + ty + 0.5;
           const fx = wx < 0 ? smooth(6, -b.x, -wx) : wx > bwT ? smooth(6, b.x + b.w - bwT, wx - bwT) : 0;
-          const fy = wy < 0 ? smooth(5, -b.y, -wy) : wy > BUILDING_H ? smooth(12, b.y + b.h - BUILDING_H, wy - BUILDING_H) : 0;
+          const fy = wy < 0 ? smooth(5, -b.y, -wy) : wy > bhT ? smooth(12, b.y + b.h - bhT, wy - bhT) : 0;
           const i = (ty * b.w + tx) * 4;
           img.data[i] = 18;
           img.data[i + 1] = 40;
@@ -323,6 +341,8 @@ export class Renderer {
     this.date.setTime(this.clock());
     this.dt = dt;
     this.updateCars(now, dt);
+    if (opts.legends === false) this.legends.clear();
+    else this.legends.update(now, dt);
     const W = this.canvas.width;
     const H = this.canvas.height;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -365,15 +385,6 @@ export class Renderer {
     const hour = this.lighting.update(now, daylightModeOf(opts), this.hourOverride, this.date);
     const t = now;
 
-    // janelas da fachada nos slots vazios
-    for (const w of this.shellWindows) {
-      const slot = Number(w.areaId.slice(6));
-      const room = this.roomInSlot(slot);
-      if (room && room.phase === 'ready') continue;
-      if (!visible(w.cx - 24, w.baseY - 40, 48, 44)) continue;
-      this.drawWindow(w, hour, t, 1);
-    }
-
     // ---- áreas: piso, paredes e itens de parede
     for (const vis of this.areas.values()) {
       const p = vis.px;
@@ -390,6 +401,15 @@ export class Renderer {
     const view = { x0: vx0, y0: vy0, x1: vx1, y1: vy1 };
     // alarme de CI: tom vermelho no piso (por baixo dos móveis e personagens)
     this.roomFx.drawFloor(ctx, this.sim, now, view);
+    // shadows of the flying legendaries, under everything on the ground
+    for (const l of this.legends.list) if (l.flies && visible(l.x - 12, l.y - 4, 24, 8)) drawFlyerShadow(ctx, l);
+    // karaoke: coloured spotlights sweep the stage and the dance floor during a song
+    const karaoke = this.areas.get(KARAOKE_ID);
+    const singing = this.sim.social.karaokeLive();
+    if (karaoke && singing && visible(karaoke.px.x, karaoke.px.y, karaoke.px.w, karaoke.px.h)) {
+      const p = karaoke.px;
+      this.safe(() => drawKaraokeLights(ctx, { x: p.x + TILE, y: p.y + 2 * TILE, w: p.w - 2 * TILE, h: 7 * TILE }, now));
+    }
 
     // ---- entidades ordenadas por profundidade
     const ents = this.ents;
@@ -417,6 +437,7 @@ export class Renderer {
         if (s <= 0.01) continue;
         if (!visible(f.ax - 3 * TILE, f.ay - 4 * TILE, 6 * TILE, 4 * TILE + 4)) continue;
         push(K.FurnBase, f.ay, f, vis, s);
+        if (f.kind === 'pool_table') push(K.Balls, f.ay + 0.1, f, vis, s);
         const fs = furnitureSprites(this.art, f, this.furnState(f, now));
         if (fs?.front) push(K.FurnFront, f.ay + 0.5, f, vis, s);
       }
@@ -448,21 +469,11 @@ export class Renderer {
       }
       push(K.Prop, prop.y, prop, null, alpha);
     }
-    for (const sh of this.shells) {
-      const room = this.roomInSlot(sh.slot);
-      let alpha = 1;
-      if (room) {
-        if (room.phase !== 'building' && room.phase !== 'dismantling') continue;
-        const pr = room.progress(now);
-        alpha = room.phase === 'building' ? 1 - Math.min(1, pr * 3) : Math.min(1, Math.max(0, (pr - 0.75) * 4));
-        if (alpha <= 0.02) continue;
-      }
-      for (const prop of sh.props) {
-        if (!visible(prop.x - 24, prop.y - 56, 48, 60)) continue;
-        push(K.Prop, prop.y, prop, null, alpha);
-      }
-    }
     for (const car of this.cars) if (visible(car.x - 24, car.y - 24, 48, 28)) push(K.Car, car.y, car, null, 1);
+    for (const l of this.legends.list) {
+      const box = this.legends.def(l).box;
+      if (!l.flies && visible(l.x - box.w, l.y - box.h - 12, 2 * box.w, box.h + 16)) push(K.Legend, l.y, l, null, 1);
+    }
     ents.sort((a, b) => a.y - b.y || a.k - b.k);
 
     this.iconCount = 0;
@@ -483,9 +494,24 @@ export class Renderer {
         case K.Car:
           this.drawCar(e.ref as Car);
           break;
+        case K.Balls:
+          this.drawPoolBalls(e.ref as FurnVis, now);
+          break;
+        case K.Legend:
+          this.safe(() => drawLegend(ctx, this.art, e.ref as Legend, this.legends.def(e.ref as Legend), now));
+          break;
       }
     }
+    // flying legendaries: over everything on the ground (and the roof), lowest first
+    const flyers = this.legends.list.filter((l) => l.flies && visible(l.x - 60, l.y - l.alt - 60, 120, 120)).sort((a, b) => a.y - b.y);
+    for (const l of flyers) this.safe(() => drawLegend(ctx, this.art, l, this.legends.def(l), now));
     this.drawPingPong(now);
+    this.drawPickleballs(now);
+    if (karaoke && visible(karaoke.px.x, karaoke.px.y, karaoke.px.w, karaoke.px.h)) {
+      // the mirror ball hangs between the neon sign and the screen, in front of the north wall
+      const p = karaoke.px;
+      this.safe(() => drawDiscoBall(ctx, p.x + 9 * TILE, p.y + 4, p.y + Math.round(1.65 * TILE), now, singing));
+    }
     // ---- espera de shell: teias de aranha, confete/pipoca/chuva (por cima das entidades)
     this.drawCobwebs(now);
     this.drainEffects(now);
@@ -503,6 +529,8 @@ export class Renderer {
         drawSeasonalLights(ctx, this.theme, vis.layout, vis.room ? vis.room.light(now) : 1);
       }
     }
+    // legendaries glow a little (and sparkle when they turn up or leave), also in the dark
+    for (const l of this.legends.list) if (visible(l.x - 80, l.y - l.alt - 100, 160, 140)) this.safe(() => drawLegendFx(ctx, l, this.legends.def(l), now, this.night));
     // giroflex e balão "!" do alarme de CI (brilham também no escuro)
     this.roomFx.drawLights(ctx, this.sim, this.heads, now, view);
 
@@ -636,6 +664,25 @@ export class Renderer {
         if (r) this.safe(() => this.art.drawScreen(ctx, { x: o.x + r.x, y: o.y + rise + r.y, w: r.w, h: r.h }, mode, now, seed));
         return;
       }
+      case 'karaoke_screen': {
+        const s = wallSprites(this.art, 'karaoke_screen', w.variant, 0, w.seed);
+        if (!s) return;
+        const o = wallItemOrigin(w, s.base);
+        ctx.drawImage(s.base.canvas, o.x, o.y + rise);
+        const r = s.base.rects?.tv;
+        const mode: ScreenMode = this.sim.social.karaokeLive() ? 'karaoke' : 'standby';
+        if (r) this.safe(() => this.art.drawScreen(ctx, { x: o.x + r.x, y: o.y + rise + r.y, w: r.w, h: r.h }, mode, now, w.seed));
+        return;
+      }
+      case 'scoreboard': {
+        const s = wallSprites(this.art, 'scoreboard', w.variant, 0, w.seed);
+        if (!s) return;
+        const o = wallItemOrigin(w, s.base);
+        ctx.drawImage(s.base.canvas, o.x, o.y + rise);
+        const r = s.base.rects?.screen;
+        if (r) this.safe(() => drawScoreboard(ctx, { x: o.x + r.x, y: o.y + rise + r.y, w: r.w, h: r.h }, this.sim.social.courtScore()));
+        return;
+      }
       case 'mirror': {
         const s = wallSprites(this.art, 'mirror', w.variant, 0, w.seed);
         if (!s) return;
@@ -736,7 +783,7 @@ export class Renderer {
   // =================================================================== entidades
 
   private furnState(f: FurnVis, now: number): number {
-    if (f.kind === 'coffee_machine') return (this.sim.machineUntil.get(f.id) ?? 0) > now ? 1 : 0;
+    if (f.kind === 'coffee_machine' || f.kind === 'espresso_machine') return (this.sim.machineUntil.get(f.id) ?? 0) > now ? 1 : 0;
     if (f.kind === 'toilet_stall') return this.sim.stallBusy.has(f.id) ? 1 : 0;
     return 0;
   }
@@ -765,9 +812,12 @@ export class Renderer {
         this.safe(() => this.art.drawScreen(ctx, { x: dx + r.x, y: dy + r.y, w: r.w, h: r.h }, mode, now, f.seed));
       } else if (f.kind === 'coffee_machine' && state === 1) {
         this.drawSteam(f.ax, dy + 2, now, f.seed);
+      } else if (f.kind === 'espresso_machine' && state === 1) {
+        this.drawSteam(f.ax - 3, dy + 3, now, f.seed);
+        this.drawSteam(f.ax + 4, dy + 4, now, f.seed + 3);
       } else if (f.kind === 'arcade' && s.rects?.screen) {
-        // duelo no fliperama: as duas máquinas mostram a partida
-        const seed = this.sim.social.arcadeSeed();
+        // duelo no fliperama: as máquinas da sala da partida mostram o jogo
+        const seed = this.sim.social.arcadeSeed(area.id);
         const r = s.rects.screen;
         if (seed !== null) this.safe(() => this.art.drawScreen(ctx, { x: dx + r.x, y: dy + r.y, w: r.w, h: r.h }, 'game', now, seed));
       }
@@ -778,10 +828,13 @@ export class Renderer {
   /** Tela do monitor: segue a atividade de quem senta ali. */
   deskScreen(f: FurnVis, area: AreaVis): ScreenMode {
     const room = area.room;
+    // the shared desks of the central office: on, waiting for someone
+    if (!room && !f.seatSpot) return 'standby';
     if (room && room.light(this.sim.now) < 0.3) return 'off';
     const owner = f.seatSpot ? this.sim.spots.ownerOf(f.seatSpot) : undefined;
     const ch = owner ? this.sim.chars.get(owner) : undefined;
-    if (!ch || ch.leaving) return 'off';
+    // a free hot desk of the central office stays on, waiting for someone
+    if (!ch || ch.leaving) return room ? 'off' : 'standby';
     const seated = ch.atSpot === f.seatSpot;
     if (ch.mode === 'wait') return 'alert';
     if (!seated) return 'idle';
@@ -1157,6 +1210,30 @@ export class Renderer {
       ctx.fillRect(Math.round(x) - 1, Math.round(baseY) + 1, 2, 1);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(Math.round(x) - 1, Math.round(baseY - arc) - 1, 2, 2);
+    }
+  }
+
+  /** The balls on the felt (racked, or moving with the billiards match). */
+  private drawPoolBalls(f: FurnVis, now: number): void {
+    const s = furnitureSprites(this.art, f, 0)?.base;
+    const r = s?.rects?.felt;
+    if (!s || !r) return;
+    const x = Math.round(f.ax - s.ax) + r.x;
+    const y = Math.round(f.ay - s.ay) + r.y;
+    this.safe(() => this.poolFx.draw(this.ctx, { x, y, w: r.w, h: r.h }, this.sim.social.billiardsGame(), now));
+  }
+
+  /** The pickleball crossing the court between the two players. */
+  private drawPickleballs(now: number): void {
+    for (const g of this.sim.social.gatherings) {
+      if (g.kind !== 'pickleball' || g.phase !== 'run') continue;
+      const ps: Character[] = [];
+      for (const m of g.members) {
+        if (m.role !== 'player' || m.left) continue;
+        const c = this.sim.chars.get(m.id);
+        if (c) ps.push(c);
+      }
+      if (ps.length === 2) drawPickleball(this.ctx, ps[0], ps[1], g.startAt, now);
     }
   }
 

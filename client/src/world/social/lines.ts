@@ -20,6 +20,10 @@ export const INVITE = {
   rps: [tr('Jokenpô valendo 🪙{v}?'), tr('Aposto 🪙{v} no jokenpô!'), tr('Pedra, papel e tesoura? 🪙{v}!')],
   rpsHonor: [tr('Jokenpô? Só pela honra 😅'), tr('Jokenpô valendo nada?')],
   mirror: [tr('Bora dar um tapa no visual? 💄'), tr('Espelho? Preciso me arrumar ✨')],
+  billiards: [tr('Sinuca? 🎱'), tr('Bora uma partida de sinuca? 🎱'), tr('Quem quebra o triângulo? 🎱')],
+  pickleball: [tr('Bora um pickleball? 🎾'), tr('Quadra livre! Pickleball? 🎾'), tr('Vem jogar pickleball!')],
+  karaoke: [tr('Karaokê! Quem canta primeiro? 🎤'), tr('Bora soltar a voz? 🎤'), tr('Hoje tem karaokê! 🎶')],
+  coffeebar: [tr('Bora num espresso? ☕'), tr('Cafezinho na cafeteria? ☕'), tr('Pausa pro cappuccino? ☕')],
 } satisfies Record<string, Pool>;
 
 export const ACCEPT: Pool = [tr('Bora!'), tr('Partiu!'), tr('Fechado! 🤝'), tr('Só se for agora!'), tr('Opa!'), tr('Já é!'), tr('Demorou!')];
@@ -58,6 +62,26 @@ export const PINGPONG = {
   point: [tr('Ponto! 🏓'), tr('Toma!'), tr('Na quina!'), tr('Corta!'), tr('Defende essa!')],
   cheer: [tr('Boa!'), tr('Vai, {nome}!'), tr('Uooou!'), tr('Que ralo!')],
   final: [tr('{a} a {b}! 🏆'), tr('Ganhei de {a} a {b}! 🏆')],
+};
+
+export const BILLIARDS = {
+  pot: [tr('Encaçapei! 🎱'), tr('Na caçapa!'), tr('Tabela perfeita!'), tr('Essa foi limpa')],
+  miss: [tr('Errei por pouco…'), tr('Quase!'), tr('A bola não quis…'), tr('Faltou giz 😅')],
+  cheer: [tr('Boa tacada!'), tr('Vai, {nome}!'), tr('Que efeito!'), tr('Uooou!')],
+  final: [tr('Bola oito na caçapa! 🏆'), tr('Fechei a mesa! 🏆'), tr('{a} a {b}, mesa limpa! 🏆')],
+};
+
+export const PICKLEBALL = {
+  point: [tr('Ponto! 🎾'), tr('Dink perfeito!'), tr('Na linha!'), tr('Fora da cozinha!'), tr('Smash! 💥')],
+  cheer: [tr('Boa!'), tr('Vai, {nome}!'), tr('Que rali!'), tr('Uooou!')],
+  final: [tr('{a} a {b}! 🏆'), tr('Ganhei de {a} a {b}! 🏆'), tr('Jogo, set e partida! 🏆')],
+};
+
+export const KARAOKE = {
+  sing: [tr('🎵 Lá lá láaa 🎵'), tr('🎶 Agora o refrão! 🎶'), tr('🎤 Ôôôôh~ 🎤'), tr('🎶 Todo mundo junto! 🎶'), tr('🎵 Iê iê iê! 🎵')],
+  cheer: [tr('Arrasou! 👏'), tr('Mais uma! Mais uma!'), tr('Que voz! 😍'), tr('Canta, {nome}!'), tr('Uhuuu! 🎶')],
+  laugh: [tr('Desafinou, mas com estilo 😂'), tr('Essa nota não existe 😂')],
+  end: [tr('Obrigado, obrigado! 🙇'), tr('Alguém gravou isso?'), tr('Próxima música!')],
 };
 
 export const RPS = {

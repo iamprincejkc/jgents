@@ -12,7 +12,7 @@ const GLYPHS: Readonly<Record<string, string>> = {
   '9': '111101111001110', '_': '000000000000111', '-': '000000111000000', '#': '101111101111101', '.': '000000000000010',
   '(': '010100100100010', ')': '010001001001010', '/': '001001010100100', ' ': '000000000000000', ':': '000010000010000',
   ',': '000000000010100', '×': '000101010101000', '—': '000000111000000', '>': '100010001010100', '<': '001010100010001',
-  '+': '000010111010000',
+  '+': '000010111010000', '!': '010010010000010',
 };
 
 /** Marcas diacríticas: linhas de 3 colunas e deslocamento vertical da primeira linha. */
@@ -31,6 +31,13 @@ const DIACRITIC: Readonly<Record<string, readonly [string, Mark]>> = {
   é: ['e', 'acute'], ê: ['e', 'circ'], í: ['i', 'acute'],
   ó: ['o', 'acute'], ô: ['o', 'circ'], õ: ['o', 'tilde'], ú: ['u', 'acute'], ç: ['c', 'cedilla'],
 };
+
+/** The 3x5 glyph of one character as 15 bits, row by row ('1' = ink). Accents are dropped; unknown characters are blank. */
+export function glyphBits(ch: string): string {
+  const raw = ch.toLowerCase();
+  const dia = DIACRITIC[raw];
+  return GLYPHS[dia ? dia[0] : raw] ?? GLYPHS[' '];
+}
 
 /** Largura em px de `text` desenhado por pixelText (3 px por letra + 1 px de espaço). */
 export function pixelTextWidth(text: string): number {

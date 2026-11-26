@@ -68,6 +68,12 @@ button { cursor: pointer; }
 .side__brand small { display: block; font-weight: 450; color: var(--muted); font-size: 12px; letter-spacing: 0; }
 .side__new { margin: 4px 12px 10px; display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--panel); font-weight: 550; }
 .side__new:hover { border-color: var(--accent); color: var(--accent); }
+.side__company,
+.side__hq { margin-top: -4px; }
+.side__hq { color: inherit; text-decoration: none; }
+.side__company[hidden],
+.side__hq[hidden] { display: none; }
+.side__label--inline { padding: 12px 10px 4px; }
 .side__label { padding: 8px 18px 4px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); font-weight: 600; }
 .side__list { flex: 1; overflow-y: auto; padding: 2px 8px 12px; }
 .side__foot { border-top: 1px solid var(--line); padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: var(--muted); gap: 8px; }

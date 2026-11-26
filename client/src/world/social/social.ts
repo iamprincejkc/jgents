@@ -9,9 +9,10 @@ import type { AgentSocial, SocialEvent } from '../api';
 import { mulberry32 } from '../../../../shared/hash';
 import { TILE } from '../constants';
 import { CAFE_ID, LOUNGE_ID, RECEPTION_ID, RESTROOM_ID } from '../layout/core';
+import { BILLIARDS_ID, COFFEEBAR_ID, COURT_ID, KARAOKE_ID } from '../layout/fun';
 import type { SpotDef } from '../layout/types';
 import { FREE } from '../path/grid';
-import { isLongIdle } from '../sim/behavior';
+import { agentLongIdle } from '../sim/behavior';
 import { facing, type Character } from '../sim/character';
 import type { Sim } from '../sim/sim';
 import type { Step } from '../sim/steps';
@@ -54,7 +55,7 @@ export type { SocialEvent } from '../api';
 /** Quem espera um shell só sai da mesa depois disto (antes, pipoca na mesa). */
 export const SHELL_SOCIAL_MIN_MS = 40_000;
 /** Quem não chega ao lugar da roda em tanto tempo desiste (a roda acontece sem ele ou não acontece). */
-const GATHER_TIMEOUT_MS = 35_000;
+const GATHER_TIMEOUT_MS = 60_000;
 const SAY_MS = 2_600;
 const FLOATER_MS = 1_900;
 const MAX_FLOATERS = 24;
@@ -63,14 +64,29 @@ const COIN_COLOR = '#ffd34d';
 const LOSS_COLOR = '#ff8a8a';
 
 const KIND_LIST = Object.keys(KINDS) as GatherKind[];
-const PLACES: Readonly<Record<string, string>> = { [LOUNGE_ID]: tr('Lounge'), [CAFE_ID]: tr('Copa'), [RECEPTION_ID]: tr('Recepção'), [RESTROOM_ID]: tr('Banheiros') };
+const PLACES: Readonly<Record<string, string>> = {
+  [LOUNGE_ID]: tr('Lounge'),
+  [CAFE_ID]: tr('Copa'),
+  [RECEPTION_ID]: tr('Recepção'),
+  [RESTROOM_ID]: tr('Banheiros'),
+  [COFFEEBAR_ID]: tr('Cafeteria'),
+  [BILLIARDS_ID]: tr('Salão de sinuca'),
+  [COURT_ID]: tr('Quadra de pickleball'),
+  [KARAOKE_ID]: tr('Karaokê'),
+};
 /** O que se perde/ganha em cada jogo (texto do extrato: "Perdeu no jokenpô para Rafaela"). */
 const MATCH_WHAT: Partial<Record<GatherKind, string>> = {
   rps: tr('no jokenpô'),
   pingpong: tr('no pingue-pongue'),
   videogame: tr('no videogame'),
   arcade: tr('no fliperama'),
+  billiards: tr('na sinuca'),
+  pickleball: tr('no pickleball'),
 };
+/** Rally games: points go back and forth (score line, lines pool and held paddle). */
+const RALLY: ReadonlySet<GatherKind> = new Set<GatherKind>(['pingpong', 'pickleball']);
+/** Chats at a table (passing by a coffee machine first). */
+const TABLE_CHAT: ReadonlySet<GatherKind> = new Set<GatherKind>(['kitchen', 'coffeebar']);
 
 function between(rng: () => number, a: number, b: number): number {
   return a + rng() * (b - a);
@@ -173,7 +189,8 @@ export class Social {
     if (!free.length) return null;
     const [host, ...rest] = free;
     const extra = kind === 'mirror' ? Math.min(1, rest.length) : Math.min(rest.length, KINDS[kind].max - 1);
-    const ok = this.start(kind, host, rest, now, false, Math.max(KINDS[kind].min - 1, Math.min(extra, kind === 'tv' || kind === 'kitchen' ? 3 : 1)), true);
+    const big = kind === 'tv' || kind === 'kitchen' || kind === 'karaoke' || kind === 'coffeebar';
+    const ok = this.start(kind, host, rest, now, false, Math.max(KINDS[kind].min - 1, Math.min(extra, big ? 3 : 1)), true);
     if (!ok) return null;
     const g = host.gathering;
     return g ? g.members.map((m) => this.sim.chars.get(m.id)?.info.name ?? m.id) : null;
@@ -186,24 +203,25 @@ export class Social {
     let want: number;
     if (wantOverride !== undefined) want = wantOverride;
     else if (kind === 'tv') want = 1 + Math.floor(rng() * 3);
-    else if (kind === 'kitchen') want = 1 + Math.floor(rng() * 2.4);
+    else if (kind === 'kitchen' || kind === 'coffeebar') want = 1 + Math.floor(rng() * 2.4);
+    else if (kind === 'karaoke') want = 1 + Math.floor(rng() * 3);
     else if (kind === 'mirror') want = groupOnly ? 1 : cands.some((c) => hasTrait(personaFor(c.info.seed), 'vaidade')) && rng() < 0.5 ? 1 : 0;
     else want = info.min - 1;
     // torcida já na largada, às vezes
-    if (wantOverride === undefined && (kind === 'pingpong' || kind === 'videogame' || kind === 'rps') && rng() < 0.3) want++;
+    if (wantOverride === undefined && (kind === 'pingpong' || kind === 'videogame' || kind === 'rps' || kind === 'billiards' || kind === 'pickleball') && rng() < 0.3) want++;
     want = Math.max(0, Math.min(want, cands.length, info.max - 1));
     const ranked = cands
       .map((c) => {
         const cp = personaFor(c.info.seed);
         let s = partnerScore(kind, cp, bondBetween(host.info.seed, c.info.seed), rng);
-        if (isLongIdle(c.info.status, c.info.statusSince, now)) s -= 1.5;
+        if (agentLongIdle(c.info, now)) s -= 1.5;
         if (kind === 'mirror' && !hasTrait(cp, 'vaidade')) s -= 2;
         return { c, s };
       })
       .sort((a, b) => b.s - a.s);
     let chosen = ranked.slice(0, want).map((x) => x.c);
     // dorminhocos (ociosos há muito tempo) às vezes nem acordam com o convite
-    if (!forced) chosen = chosen.filter((c, i) => i < info.min - 1 || !isLongIdle(c.info.status, c.info.statusSince, now) || rng() < 0.35);
+    if (!forced) chosen = chosen.filter((c, i) => i < info.min - 1 || !agentLongIdle(c.info, now) || rng() < 0.35);
     if (chosen.length + 1 < (kind === 'mirror' ? (groupOnly ? 2 : 1) : info.min)) return false;
     const plan = this.plan(kind, chosen.length + 1, host);
     if (!plan) return false;
@@ -236,12 +254,15 @@ export class Social {
       pending: [],
     };
     const tag = ownerTag(g);
-    for (const s of plan.pool) if (this.sim.spots.reserve(s.id, tag)) g.pool.push(s.id);
     const everyone = [host, ...chosen];
-    const nPlayers = info.match ? 2 : everyone.length;
+    // karaoke: the host sings, sometimes as a duet; plan.seats = [stage 1, stage 2, ...crowd]
+    const singers = kind === 'karaoke' ? (everyone.length >= 3 && rng() < 0.3 ? 2 : 1) : 0;
+    const unusedStage = kind === 'karaoke' && singers === 1 ? plan.seats[1]?.id : undefined;
+    for (const s of plan.pool) if (s.id !== unusedStage && this.sim.spots.reserve(s.id, tag)) g.pool.push(s.id);
+    const nPlayers = info.match ? 2 : kind === 'karaoke' ? singers : everyone.length;
     everyone.forEach((c, i) => {
-      const role: Role = info.match ? (i < nPlayers ? 'player' : 'watcher') : kind === 'kitchen' || kind === 'talk' ? 'talker' : 'player';
-      const spot = plan.seats[i] ?? null;
+      const role: Role = info.match || kind === 'karaoke' ? (i < nPlayers ? 'player' : 'watcher') : kind === 'kitchen' || kind === 'talk' || kind === 'coffeebar' ? 'talker' : 'player';
+      const spot = (unusedStage && i > 0 ? plan.seats[i + 1] : plan.seats[i]) ?? null;
       const m = this.member(c, role, spot);
       if (!spot && role === 'watcher') m.tile = this.standNear(g, c) ?? undefined;
       g.members.push(m);
@@ -291,7 +312,7 @@ export class Social {
     }
     if (text) this.say(host, text, now);
     guests.forEach((c, i) => {
-      const sleepy = isLongIdle(c.info.status, c.info.statusSince, now);
+      const sleepy = agentLongIdle(c.info, now);
       const p = sleepy ? L.ACCEPT_SLEEPY : c.mode === 'shell' && g.kind !== 'rps' ? L.ACCEPT_SHELL : pool;
       g.pending.push({ id: c.id, at: now + 900 + i * 650, text: L.pick(p, rng) });
     });
@@ -306,11 +327,14 @@ export class Social {
     const steps: Step[] = [];
     if (ch.atSpot) steps.push({ t: 'exit' });
     let held: HeldItem = 'none';
-    if (g.kind === 'kitchen') {
-      // passa na cafeteira (ou no bebedouro) antes de sentar para o papo
-      const kind = hasTrait(personaFor(ch.info.seed), 'cafeina') || ch.rng() < 0.65 ? 'coffee' : 'water';
-      const stop = sim.spots.findFree(kind, { by: ch.id, rng: ch.rng }) ?? sim.spots.findFree(kind === 'coffee' ? 'water' : 'coffee', { by: ch.id, rng: ch.rng });
-      if (stop && ch.rng() < 0.8 && sim.reserveTemp(ch, stop)) {
+    if (TABLE_CHAT.has(g.kind)) {
+      // passa na cafeteira (ou no bebedouro) antes de sentar para o papo; na cafeteria, sempre no espresso de lá
+      const bar = g.kind === 'coffeebar';
+      const kind = bar || hasTrait(personaFor(ch.info.seed), 'cafeina') || ch.rng() < 0.65 ? 'coffee' : 'water';
+      const stop = bar
+        ? sim.spots.findFree('coffee', { by: ch.id, rng: ch.rng, filter: (s) => s.areaId === COFFEEBAR_ID })
+        : (sim.spots.findFree(kind, { by: ch.id, rng: ch.rng }) ?? sim.spots.findFree(kind === 'coffee' ? 'water' : 'coffee', { by: ch.id, rng: ch.rng }));
+      if (stop && ch.rng() < (bar ? 0.9 : 0.8) && sim.reserveTemp(ch, stop)) {
         const coffee = stop.kind === 'coffee';
         steps.push(
           { t: 'go', tx: stop.tx, ty: stop.ty, fx: stop.x, fy: stop.y, dir: stop.dir },
@@ -342,7 +366,13 @@ export class Social {
       if (active(g).length >= KINDS[g.kind].max) continue;
       if (this.openSpotFor(g, ch) === undefined) continue;
       let s = KINDS[g.kind].match ? 0.8 : 1;
-      s *= g.kind === 'tv' ? (hasTrait(p, 'series') ? 3 : 1.4) : g.kind === 'kitchen' ? (hasTrait(p, 'fofoca') || hasTrait(p, 'cafeina') ? 2.5 : 1) : hasTrait(p, 'competicao') || hasTrait(p, 'esporte') || hasTrait(p, 'games') ? 2 : 1;
+      s *= g.kind === 'tv'
+        ? hasTrait(p, 'series') ? 3 : 1.4
+        : TABLE_CHAT.has(g.kind)
+          ? hasTrait(p, 'fofoca') || hasTrait(p, 'cafeina') ? 2.5 : 1
+          : g.kind === 'karaoke'
+            ? hasTrait(p, 'piadas') || hasTrait(p, 'vaidade') ? 2.5 : hasTrait(p, 'timidez') ? 0.6 : 1.3
+            : hasTrait(p, 'competicao') || hasTrait(p, 'esporte') || hasTrait(p, 'games') ? 2 : 1;
       for (const m of active(g)) {
         const o = this.sim.chars.get(m.id);
         const b = o ? bondBetween(ch.info.seed, o.info.seed) : null;
@@ -371,7 +401,7 @@ export class Social {
   private join(g: Gathering, ch: Character, now: number): boolean {
     const spot = this.openSpotFor(g, ch);
     if (spot === undefined) return false;
-    const role: Role = g.kind === 'kitchen' ? 'talker' : KINDS[g.kind].match ? 'watcher' : 'player';
+    const role: Role = TABLE_CHAT.has(g.kind) ? 'talker' : KINDS[g.kind].match || g.kind === 'karaoke' ? 'watcher' : 'player';
     const m = this.member(ch, role, spot);
     m.late = true;
     if (!spot) {
@@ -383,7 +413,7 @@ export class Social {
     if (g.phase === 'run') this.basePose(g, m, now);
     g.members.push(m);
     this.dispatch(g, m, ch, now);
-    const line = g.kind === 'tv' ? tr('Posso ver junto? 📺') : g.kind === 'kitchen' ? tr('Tem lugar pra mais um? ☕') : tr('Quem tá ganhando?');
+    const line = g.kind === 'tv' ? tr('Posso ver junto? 📺') : TABLE_CHAT.has(g.kind) ? tr('Tem lugar pra mais um? ☕') : g.kind === 'karaoke' ? tr('Canta mais uma! 🎤') : tr('Quem tá ganhando?');
     this.say(ch, line, now);
     return true;
   }
@@ -450,16 +480,46 @@ export class Social {
         return { seats: order.slice(0, n), pool: order };
       }
       case 'arcade': {
+        // two machines side by side in the same room (the lounge, a games room)
+        if (n > 2) return null;
         const a = spots.ofKind('arcade').filter(free);
-        return a.length >= 2 && n <= 2 ? { seats: a.slice(0, 2), pool: a.slice(0, 2) } : null;
+        const pairs: SpotDef[][] = [];
+        for (const s of a) {
+          const o = a.find((t) => t.areaId === s.areaId && t.ty === s.ty && t.tx === s.tx + 1);
+          if (o) pairs.push([s, o]);
+        }
+        if (!pairs.length) return null;
+        const p = pairs[Math.floor(ch.rng() * pairs.length)];
+        return { seats: p, pool: p };
       }
-      case 'pingpong': {
-        const g = spots.findFreeGroup('pingpong', { filter: (grp) => grp.every(free) });
+      case 'pingpong':
+      case 'billiards': {
+        const g = spots.findFreeGroup(kind === 'pingpong' ? 'pingpong' : 'pool', { filter: (grp) => grp.every(free) });
         if (!g) return null;
-        const watch = spots.ofKind('watch').filter(free);
+        const watch = spots.ofKind('watch').filter((s) => s.group === (kind === 'pingpong' ? 'watch:pingpong' : 'watch:sinuca') && s.areaId === g[0].areaId && free(s));
         if (n > 2 + watch.length) return null;
         return { seats: [...g, ...watch].slice(0, n), pool: [...g, ...watch] };
       }
+      case 'pickleball': {
+        const g = spots.findFreeGroup('pickleball', { filter: (grp) => grp.every(free) });
+        if (!g) return null;
+        // the crowd sits on the benches along the court
+        const benches = spots.ofKind('bench').filter((s) => s.areaId === COURT_ID && free(s));
+        if (n > 2 + benches.length) return null;
+        return { seats: [...g, ...benches].slice(0, n), pool: [...g, ...benches] };
+      }
+      case 'karaoke': {
+        const stage = spots.findFreeGroup('stage', { filter: (grp) => grp.every(free) });
+        if (!stage) return null;
+        const order = [...stage].sort((a, b) => a.tx - b.tx);
+        const dance = spots.ofKind('watch').filter((s) => s.group === 'watch:karaoke' && free(s));
+        const seats = [...spots.ofKind('sofa'), ...spots.ofKind('beanbag'), ...spots.ofKind('armchair')].filter((s) => s.areaId === KARAOKE_ID && free(s));
+        const crowd = [...dance, ...seats];
+        if (n - 1 > crowd.length) return null;
+        return { seats: [...order, ...crowd], pool: [...order, ...crowd] };
+      }
+      case 'coffeebar':
+        return this.pairSeats(n, COFFEEBAR_ID, free, ch.rng);
       case 'talk':
       case 'rps': {
         const g = spots.findFreeGroup('talk', { rng: ch.rng, filter: (grp) => grp.every(free) });
@@ -513,6 +573,27 @@ export class Social {
     return { seats: order.slice(0, n), pool: order };
   }
 
+  /**
+   * Seats facing each other across a little table (west seat looking right, east seat two tiles
+   * away looking left) in one area; 3-4 people take two such pairs.
+   */
+  private pairSeats(n: number, areaId: string, free: (s: SpotDef) => boolean, rng: () => number): SeatPlan | null {
+    const here: SpotDef[] = [];
+    for (const s of this.sim.spots.all()) if (s.areaId === areaId && s.seated && (s.kind === 'cafe_seat' || s.kind === 'armchair')) here.push(s);
+    const pairs: SpotDef[][] = [];
+    for (const s of here) {
+      if (s.dir !== 'right') continue;
+      const o = here.find((x) => x.dir === 'left' && x.ty === s.ty && x.tx === s.tx + 2);
+      if (o && free(s) && free(o)) pairs.push([s, o]);
+    }
+    if (!pairs.length || (n > 2 && pairs.length < 2)) return null;
+    const first = pairs.splice(Math.floor(rng() * pairs.length) % pairs.length, 1)[0];
+    if (n <= 2) return { seats: first, pool: first };
+    const second = pairs[Math.floor(rng() * pairs.length) % pairs.length];
+    const order = [...first, ...second];
+    return { seats: order.slice(0, n), pool: order };
+  }
+
   private inPool(id: string): boolean {
     const owner = this.sim.spots.ownerOf(id);
     return !!owner && owner.startsWith('g:');
@@ -534,9 +615,34 @@ export class Social {
     return null;
   }
 
-  /** Partida no fliperama em andamento (as telas mostram o jogo). */
-  arcadeSeed(): number | null {
-    for (const g of this.gatherings) if (g.kind === 'arcade' && (g.phase === 'run' || g.phase === 'final')) return g.seed;
+  /** The billiards match at the pool table (running or just finished), for the balls on the felt. */
+  billiardsGame(): Gathering | null {
+    for (const g of this.gatherings) if (g.kind === 'billiards' && (g.phase === 'run' || g.phase === 'final')) return g;
+    return null;
+  }
+
+  /** Score of the pickleball match for the court's scoreboard: [west player, east player], or null. */
+  courtScore(): [number, number] | null {
+    for (const g of this.gatherings) {
+      if (g.kind !== 'pickleball' || (g.phase !== 'run' && g.phase !== 'final')) continue;
+      const xs = players(g).map((m) => this.sim.spots.get(m.spot)?.x ?? 0);
+      return xs.length === 2 && xs[0] > xs[1] ? [g.score[1], g.score[0]] : [g.score[0], g.score[1]];
+    }
+    return null;
+  }
+
+  /** Someone is singing on the karaoke stage (the screen plays the song, the lights sweep). */
+  karaokeLive(): boolean {
+    for (const g of this.gatherings) if (g.kind === 'karaoke' && (g.phase === 'run' || g.phase === 'final')) return true;
+    return false;
+  }
+
+  /** Partida no fliperama em andamento (as telas mostram o jogo); com `areaId`, só a partida daquela sala. */
+  arcadeSeed(areaId?: string): number | null {
+    for (const g of this.gatherings) {
+      if (g.kind !== 'arcade' || (g.phase !== 'run' && g.phase !== 'final')) continue;
+      if (areaId === undefined || g.members.some((m) => m.spot && this.sim.spots.get(m.spot)?.areaId === areaId)) return g.seed;
+    }
     return null;
   }
 
@@ -618,11 +724,17 @@ export class Social {
     void now;
   }
 
-  /** Encerra tudo (aba volta do segundo plano). */
-  reset(now: number): void {
-    for (const g of this.gatherings) this.end(g, now);
-    this.gatherings.clear();
-    for (const c of this.sim.chars.values()) c.gathering = null;
+  /**
+   * The page came back from the background: ends the gatherings, except those whose members all carry on as they were
+   * (`keep`, Sim.fastForward: idle ones keep playing or chatting instead of being sent back to their seats).
+   */
+  reset(now: number, keep?: (id: string) => boolean): void {
+    for (const g of [...this.gatherings]) {
+      if (keep && g.phase !== 'ended' && g.members.every((m) => m.left || keep(m.id))) continue;
+      this.end(g, now);
+      this.gatherings.delete(g);
+    }
+    for (const c of this.sim.chars.values()) if (c.gathering && !this.gatherings.has(c.gathering)) c.gathering = null;
     this.floaters.length = 0;
   }
 
@@ -674,7 +786,8 @@ export class Social {
   private checkStart(g: Gathering, now: number): void {
     const need = g.members.filter((m) => !m.left && m.role !== 'watcher' && !m.late);
     const ready = need.filter((m) => m.arrived);
-    const min = g.kind === 'mirror' ? 1 : KINDS[g.kind].min;
+    // karaoke: only the singers have to be there (the crowd strolls in)
+    const min = g.kind === 'mirror' || g.kind === 'karaoke' ? 1 : KINDS[g.kind].min;
     if (ready.length === need.length && ready.length >= min) return this.begin(g, now);
     if (now - g.createdAt < GATHER_TIMEOUT_MS) return;
     // alguém não chegou: segue com quem está lá (se der) ou desfaz
@@ -703,8 +816,20 @@ export class Social {
         g.nextAt = now + 1_500;
         break;
       case 'kitchen':
+      case 'coffeebar':
         g.until = now + between(rng, 24_000, 45_000);
         g.nextAt = now + 500;
+        break;
+      case 'karaoke':
+        g.until = now + between(rng, 26_000, 44_000);
+        g.nextAt = now + 1_200;
+        break;
+      case 'billiards':
+        g.turn = 0;
+        g.nextAt = now + 1_400;
+        break;
+      case 'pickleball':
+        g.nextAt = now + between(rng, 2_400, 3_600);
         break;
       case 'talk':
         g.until = now + between(rng, 10_000, 18_000);
@@ -746,9 +871,18 @@ export class Social {
         [m.pose, m.held] = ['use', 'none'];
         break;
       case 'pingpong':
-        [m.pose, m.held] = m.role === 'player' ? ['play', 'paddle'] : ['stand', 'none'];
+      case 'pickleball':
+        [m.pose, m.held] = m.role === 'player' ? ['play', 'paddle'] : [this.seatedAt(m) ? 'sit' : 'stand', 'none'];
+        break;
+      case 'billiards':
+        // both players hold a cue; the one whose turn it is bends over the table (see beatBilliards)
+        [m.pose, m.held] = m.role === 'player' ? ['stand', 'cue'] : ['stand', 'none'];
+        break;
+      case 'karaoke':
+        [m.pose, m.held] = m.role === 'player' ? ['sing', 'mic'] : [this.seatedAt(m) ? 'sit' : 'stand', 'none'];
         break;
       case 'kitchen':
+      case 'coffeebar':
         [m.pose, m.held] = ['sit', m.carry === 'none' ? 'none' : m.carry];
         break;
       case 'mirror':
@@ -770,8 +904,14 @@ export class Social {
       case 'arcade':
         return this.beatGame(g, now);
       case 'pingpong':
+      case 'pickleball':
         return this.beatPingPong(g, now);
+      case 'billiards':
+        return this.beatBilliards(g, now);
+      case 'karaoke':
+        return this.beatKaraoke(g, now);
       case 'kitchen':
+      case 'coffeebar':
       case 'talk':
         return this.beatChat(g, now);
       case 'rps':
@@ -900,7 +1040,10 @@ export class Social {
       g.until = now + 1_000;
       return;
     }
-    g.nextAt = now + between(rng, 2_200, 3_800);
+    const pickle = g.kind === 'pickleball';
+    const lines = pickle ? L.PICKLEBALL : L.PINGPONG;
+    // a pickleball rally crosses a whole court: points come a little slower
+    g.nextAt = now + (pickle ? between(rng, 2_800, 4_400) : between(rng, 2_200, 3_800));
     const [a, b] = ps;
     const pa = this.charOf(a);
     const pb = this.charOf(b);
@@ -909,20 +1052,124 @@ export class Social {
     g.score[i]++;
     const scorer = aWins ? a : b;
     const other = aWins ? b : a;
-    if (g.score[i] >= (TARGET.pingpong ?? 5)) return this.finishMatch(g, scorer, other, now);
+    if (g.score[i] >= (TARGET[g.kind] ?? 5)) return this.finishMatch(g, scorer, other, now);
     const c = this.charOf(scorer);
     if (c && rng() < 0.6) {
       const mine = g.score[i];
       const theirs = g.score[1 - i];
-      this.say(c, rng() < 0.5 ? `${mine} × ${theirs} 🏓` : L.pick(L.PINGPONG.point, rng, {}, g.lastLine), now);
+      this.say(c, rng() < 0.5 ? `${mine} × ${theirs} ${KINDS[g.kind].emoji}` : L.pick(lines.point, rng, {}, g.lastLine), now);
     }
     for (const w of active(g).filter((m) => m.role === 'watcher')) {
       if (rng() < 0.4) {
         this.act(w, 'cheer', 'none', 1_200, now);
         const wc = this.charOf(w);
-        if (wc && c && rng() < 0.4) this.say(wc, L.pick(L.PINGPONG.cheer, rng, { nome: c.info.name }), now);
+        if (wc && c && rng() < 0.4) this.say(wc, L.pick(lines.cheer, rng, { nome: c.info.name }), now);
       }
     }
+  }
+
+  /**
+   * Billiards: the players take turns at the table. Each beat is one shot: whoever sinks a ball keeps
+   * the table, a miss passes it over; the first to sink TARGET balls (the last one is the 8 ball) wins.
+   * The renderer animates `g.shot` (cue ball, the struck ball and the pocket).
+   */
+  private beatBilliards(g: Gathering, now: number): void {
+    const rng = g.rng;
+    const ps = players(g);
+    if (ps.length < 2) {
+      g.phase = 'final';
+      g.until = now + 1_000;
+      return;
+    }
+    const turn = g.turn ?? 0;
+    const shooter = ps[turn];
+    const waiting = ps[1 - turn];
+    const cs = this.charOf(shooter);
+    // aim first (the stroke animation plays), shoot on the next beat
+    if (shooter.pose !== 'play') {
+      [shooter.pose, shooter.held] = ['play', 'cue'];
+      [waiting.pose, waiting.held] = ['stand', 'cue'];
+      g.nextAt = now + between(rng, 1_100, 1_800);
+      return;
+    }
+    const skill = cs ? personaFor(cs.info.seed).skill : 0.5;
+    const pot = rng() < 0.3 + skill * 0.45;
+    g.shot = { at: now, by: turn, pot, n: (g.shot?.n ?? 0) + 1 };
+    g.nextAt = now + between(rng, 1_700, 2_300);
+    if (pot) {
+      g.score[turn]++;
+      if (g.score[turn] >= (TARGET.billiards ?? 4)) return this.finishMatch(g, shooter, waiting, now);
+      if (cs && rng() < 0.5) this.say(cs, L.pick(L.BILLIARDS.pot, rng, {}, g.lastLine), now);
+      for (const w of active(g).filter((m) => m.role === 'watcher')) {
+        if (rng() < 0.45) {
+          this.act(w, 'cheer', 'none', 1_200, now);
+          const wc = this.charOf(w);
+          if (wc && cs && rng() < 0.35) this.say(wc, L.pick(L.BILLIARDS.cheer, rng, { nome: cs.info.name }), now);
+        }
+      }
+      return;
+    }
+    if (cs && rng() < 0.45) this.say(cs, L.pick(L.BILLIARDS.miss, rng, {}, g.lastLine), now);
+    // the table passes to the other player (they step up and aim on the next beat)
+    g.turn = turn === 0 ? 1 : 0;
+    [shooter.pose, shooter.held] = ['stand', 'cue'];
+  }
+
+  /**
+   * Karaoke: the singer(s) belt out the song (bubbles with bits of it, notes overhead) while the
+   * crowd dances and cheers; when the song ends the machine gives a score.
+   */
+  private beatKaraoke(g: Gathering, now: number): void {
+    const rng = g.rng;
+    const singers = players(g);
+    const crowd = active(g).filter((m) => m.role === 'watcher');
+    if (!singers.length) {
+      g.phase = 'final';
+      g.until = now + 1_000;
+      return;
+    }
+    if (now >= g.until) {
+      const lead = this.charOf(singers[0]);
+      // the score: a bit of persona (show-offs and jokers ham it up), mostly luck
+      const p = lead ? personaFor(lead.info.seed) : null;
+      const bonus = p && (hasTrait(p, 'vaidade') || hasTrait(p, 'piadas')) ? 6 : 0;
+      const score = Math.min(100, Math.round(62 + rng() * 32 + bonus));
+      for (const s of singers) {
+        const c = this.charOf(s);
+        if (!c) continue;
+        this.float(c, `🎤 ${score}`, COIN_COLOR, now);
+        c.setIcon(score >= 90 ? 'trophy' : 'star', 2_600, now);
+        this.act(s, 'cheer', 'none', 2_400, now);
+      }
+      if (lead) this.say(lead, L.pick(L.KARAOKE.end, rng), now);
+      for (const m of crowd) this.act(m, rng() < 0.75 ? 'cheer' : 'laugh', 'none', 2_200, now);
+      const fan = this.charOf(this.randomOf(crowd, rng));
+      if (fan) g.pending.push({ id: fan.id, at: now + 900, text: L.pick(score >= 80 ? L.KARAOKE.cheer : L.KARAOKE.laugh, rng, { nome: lead?.info.name }) });
+      if (lead) this.event(g, '🎤', lead.id, tr('cantou no karaokê e tirou nota {0}', [score]), now);
+      g.phase = 'final';
+      g.until = now + 3_200;
+      return;
+    }
+    g.nextAt = now + between(rng, 2_300, 3_600);
+    for (const s of singers) {
+      const c = this.charOf(s);
+      if (!c) continue;
+      if (rng() < 0.55) this.say(c, L.pick(L.KARAOKE.sing, rng, {}, g.lastLine), now, 2_200);
+      else c.setIcon('music', 1_800, now);
+    }
+    const leadName = this.charOf(singers[0])?.info.name;
+    for (const m of crowd) {
+      const r = rng();
+      if (r < 0.4) this.act(m, 'cheer', 'none', 1_400, now);
+      else if (r < 0.5) this.act(m, 'laugh', 'none', 1_200, now);
+      const wc = this.charOf(m);
+      if (wc && r < 0.14) this.say(wc, L.pick(L.KARAOKE.cheer, rng, { nome: leadName }), now);
+    }
+  }
+
+  /** The member's reserved spot is a seat (bench, sofa...). */
+  private seatedAt(m: Member): boolean {
+    return !!(m.spot && this.sim.spots.get(m.spot)?.seated);
   }
 
   /** Fim de uma partida: comemoração, troféu, aposta paga, placar registrado. */
@@ -932,14 +1179,15 @@ export class Social {
     const cl = this.charOf(l);
     g.winner = w.id;
     g.loser = l.id;
-    const held: HeldItem = g.kind === 'videogame' ? 'controller' : g.kind === 'pingpong' ? 'paddle' : 'none';
+    const held: HeldItem = g.kind === 'videogame' ? 'controller' : RALLY.has(g.kind) ? 'paddle' : g.kind === 'billiards' ? 'cue' : 'none';
     this.act(w, 'cheer', held, 3_000, now);
-    this.act(l, 'sulk', held === 'paddle' ? 'none' : held, 3_000, now);
+    this.act(l, 'sulk', held === 'paddle' || held === 'cue' ? 'none' : held, 3_000, now);
     cw?.setIcon('trophy', 3_000, now);
     const [sa, sb] = g.score;
     const hi = Math.max(sa, sb);
     const lo = Math.min(sa, sb);
-    if (cw) this.say(cw, g.kind === 'pingpong' ? L.pick(L.PINGPONG.final, rng, { a: hi, b: lo }) : L.pick(L.GAME.round, rng), now);
+    const finals = g.kind === 'pingpong' ? L.PINGPONG.final : g.kind === 'pickleball' ? L.PICKLEBALL.final : g.kind === 'billiards' ? L.BILLIARDS.final : null;
+    if (cw) this.say(cw, finals ? L.pick(finals, rng, { a: hi, b: lo }) : L.pick(L.GAME.round, rng), now);
     if (cl) g.pending.push({ id: cl.id, at: now + 1_000, text: L.pick(L.RPS.lose, rng) });
     for (const m of active(g)) if (m.role === 'watcher') this.act(m, rng() < 0.5 ? 'cheer' : 'laugh', 'none', 1_800, now);
     this.settle(g, w, l, now);
@@ -961,7 +1209,7 @@ export class Social {
       this.float(cl, `−🪙${paid}`, LOSS_COLOR, now);
       this.sim.pushEffect({ kind: 'coins', charId: cl.id, toId: cw.id, at: now });
     }
-    const score = g.kind === 'pingpong' || g.kind === 'videogame' ? tr(' ({0} a {1})', [Math.max(...g.score), Math.min(...g.score)]) : '';
+    const score = RALLY.has(g.kind) || g.kind === 'videogame' || g.kind === 'billiards' ? tr(' ({0} a {1})', [Math.max(...g.score), Math.min(...g.score)]) : '';
     this.event(g, icon, cw.id, paid ? tr('ganhou 🪙{0} de {1} {2}{3}', [paid, cl.info.name, what, score]) : tr('venceu {0} {1}{2}', [cl.info.name, what, score]), now);
   }
 

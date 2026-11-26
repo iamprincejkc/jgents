@@ -12,7 +12,7 @@ import { decorateSeasonalRug, decorateSeasonalWall, seasonalRugColor, seasonalWa
 export const WALL_MARGIN = 16;
 
 /** Itens de parede redesenhados a cada frame (o resto vai para o cache). */
-const DYNAMIC_WALL: ReadonlySet<FurnitureKind> = new Set<FurnitureKind>(['window', 'clock', 'whiteboard', 'tv', 'elevator', 'light_switch', 'sign', 'mirror']);
+const DYNAMIC_WALL: ReadonlySet<FurnitureKind> = new Set<FurnitureKind>(['window', 'clock', 'whiteboard', 'tv', 'elevator', 'light_switch', 'sign', 'mirror', 'karaoke_screen', 'scoreboard']);
 
 export interface FurnVis {
   id: string;
@@ -225,6 +225,14 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
     }
   }
   if (layout.floorTint) tintFloor(fctx, px, layout.floorTint);
+  // court lines, stage and dance floor (over the tint: their colours are their own)
+  for (const d of layout.decals ?? []) {
+    try {
+      art.drawDecal?.(fctx, d.kind, d.x, d.y, d.w, d.h, d.seed);
+    } catch {
+      // arte sem o decalque: fica só o piso
+    }
+  }
   for (const rug of layout.rugs) {
     const color = seasonalRugColor(theme, rug.color);
     try {
