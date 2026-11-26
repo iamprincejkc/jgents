@@ -1,8 +1,12 @@
 // Tipos do layout do escritório. Módulos de layout são PUROS (sem DOM): geram descrições
 // que o render transforma em pixels e a simulação usa para caminhos e pontos de interesse.
-import type { Dir, FloorKind, FurnitureKind, WallStyle } from '../../art/api';
+import type { DecalKind, Dir, FloorKind, FurnitureKind, WallStyle } from '../../art/api';
 
-export type AreaKind = 'reception' | 'restroom' | 'cafe' | 'lounge' | 'room' | 'corridor';
+export type AreaKind = 'reception' | 'restroom' | 'cafe' | 'lounge' | 'room' | 'corridor'
+  // entertainment wing (layout/fun.ts)
+  | 'coffeebar' | 'billiards' | 'court' | 'karaoke'
+  // the central office (layout/hub.ts) and the rooms that fill spare spots (layout/amenity.ts)
+  | 'office' | 'amenity';
 
 /** Retângulo em tiles (coordenadas absolutas do mundo). */
 export interface TileRect {
@@ -64,6 +68,16 @@ export interface FloorPatch {
   tint2?: string;
 }
 
+/** Floor markings (court lines, stage, dance floor) in px of world, painted over the floor. */
+export interface DecalPatch {
+  kind: DecalKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  seed: number;
+}
+
 export interface RugPatch {
   x: number;
   y: number;
@@ -97,7 +111,12 @@ export type SpotKind =
   | 'sink'
   | 'elevator'
   | 'talk'
-  | 'watch'; // ponto em pé da torcida (assistir a uma partida)
+  | 'watch' // ponto em pé da torcida (assistir a uma partida)
+  // entertainment wing
+  | 'pool' // billiards: a player at one end of the pool table (pair, group 'pool')
+  | 'darts' // standing in front of the dartboard
+  | 'pickleball' // a player on a baseline of the court (pair, group 'pickleball')
+  | 'stage'; // karaoke: a singer on the stage, facing the room
 
 /**
  * Ponto de interesse. O personagem anda até o tile de aproximação (tx, ty), caminhável,
@@ -133,6 +152,8 @@ export interface AreaLayout {
   /** Retângulo da área em tiles absolutos. */
   rect: TileRect;
   floors: FloorPatch[];
+  /** (Optional) Markings over the floor, under the rugs. */
+  decals?: DecalPatch[];
   rugs: RugPatch[];
   walls: WallSegment[];
   wallItems: WallItemPlacement[];
@@ -152,6 +173,8 @@ export interface AreaLayout {
   shade?: { x: number; y: number; w: number; h: number };
   /** Retângulo (px) da placa com o nome. */
   signId?: string;
+  /** (Optional) Name shown on the room's label pill (amenity rooms). */
+  label?: string;
 }
 
 /** Elemento decorativo externo (árvore, arbusto, poste...) desenhado pelo próprio mundo. */

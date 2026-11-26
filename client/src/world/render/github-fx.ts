@@ -10,7 +10,7 @@ import type { Particles } from './particles';
 import type { RoomFx } from '../sim/github';
 import type { Sim } from '../sim/sim';
 
-const UI_FONT = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
+const UI_FONT = '"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
 const BANNER_FONT = `800 11.5px ${UI_FONT}`;
 const BANNER_H = 22;
 

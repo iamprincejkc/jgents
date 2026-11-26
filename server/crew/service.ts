@@ -2,12 +2,21 @@
 // turns one at a time in its own Claude Code session (runner.ts), different agents in parallel. Questions and
 // approvals go to the board (board.ts) through the bridge (mod/jgents-crew/mcp.mjs). Everything the page shows is
 // pushed to listeners (the SSE in http.ts) as CrewEvents.
+//
+// The company (company.ts): with a CEO in the roster every request goes to it. The CEO briefs departments with
+// `delegate`; the briefs of one turn form a ticket, and each department's final reply is its report. When the last
+// report is in, the CEO gets them all in one message, combines the work and answers the user. A department may brief
+// another the same way: its own report then waits until that colleague has reported back to it.
 import { randomBytes, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CrewAgent, CrewAgentState, CrewEvents, CrewMessage, CrewQuestion, CrewSession, CrewSessionMode, CrewSnapshot, CrewStep, CrewToolCheck } from '../../shared/crew';
+import type { CompanyFile, CompanyFileText, CrewAgent, CrewAgentState, CrewCompany, CrewEvents, CrewMessage, CrewQuestion, CrewSession, CrewSessionMode, CrewSnapshot, CrewStep, CrewToolCheck } from '../../shared/crew';
 import { findExecutable } from '../claude-bin';
 import { allowRule, Board, publicItem, type BoardItem } from './board';
+import { COMPANY_CEO_ID, COMPANY_ROOM_ID, type Activity, type ActivityKind, type AgentInfo, type AgentStatus } from '../../shared/types';
+import { hash32 } from '../../shared/hash';
+import { tr } from '../../shared/i18n';
+import { companyAgents, companyDir, CompanyLog, ensureCompanyFolder, insideFolder, memberLook, readOutboxFile, uniform, type CompanyEvent } from './company';
 import { KIND_PLAYBOOK, Roster, workspacesDir } from './roster';
 import { createClaudeClassifier, route, type Classifier } from './router';
 import { cleanEnv, runTurn, type RunningTurn, type Spawner } from './runner';
@@ -34,6 +43,12 @@ export interface CrewOptions {
   memory?: boolean;
 }
 
+/** Where a job's final reply goes: the ticket it reports to, and its slot there. */
+interface TicketRef {
+  id: string;
+  key: string;
+}
+
 interface Job {
   runId: string;
   agentId: string;
@@ -42,6 +57,34 @@ interface Job {
   /** A fresh session was already tried for this job (after --resume failed). */
   retried?: boolean;
   handoffs: number;
+  /** The user message this work serves (briefs and reports keep pointing at it). */
+  replyTo?: string;
+  /** A brief: its final reply is a report to this ticket. */
+  ticket?: TicketRef;
+}
+
+interface Report {
+  agentId: string;
+  status: 'done' | 'error' | 'stopped';
+  text: string;
+  costUsd?: number;
+}
+
+/** The briefs one turn sent with `delegate`: their reports go back to the agent that sent them, all together. */
+interface Ticket {
+  id: string;
+  /** Who briefed (gets the reports). */
+  owner: string;
+  /** The turn that briefed. */
+  ownerRun: string;
+  /** When the owner was itself briefed: its final reply (after these reports) is its own report there. */
+  parent?: TicketRef;
+  /** The user message it all serves. */
+  request?: string;
+  /** Briefs still out: slot key -> agent. */
+  pending: Map<string, string>;
+  reports: Report[];
+  briefs: number;
 }
 
 interface Running {
@@ -67,6 +110,10 @@ export interface AnswerInput {
 
 const TEXT_MAX = 20_000;
 const MAX_HANDOFFS = 4;
+/** Briefs one turn may send (the whole company at once is 16). */
+const MAX_BRIEFS = 20;
+/** Room for each report in the message that hands the reports back. */
+const REPORT_MAX = 8_000;
 const SNAPSHOT_MESSAGES = 200;
 
 const TOOL_LABEL: Record<string, (i: Record<string, unknown>) => string> = {
@@ -86,6 +133,45 @@ const TOOL_LABEL: Record<string, (i: Record<string, unknown>) => string> = {
   Skill: (i) => `Loaded the ${String(i.skill ?? i.name ?? '')} skill`,
   mcp__jgents__ask_user: () => 'Asked you a question',
   mcp__jgents__handoff: (i) => `Handed off to @${String(i.agent ?? '')}`,
+  mcp__jgents__delegate: (i) => `Briefed @${String(i.agent ?? '').replace(/^@/, '')}`,
+};
+
+/** What a tool call looks like in the office (the desk screen and the bubble follow the kind). */
+const TOOL_KIND: Record<string, ActivityKind> = {
+  Bash: 'run',
+  PowerShell: 'run',
+  Read: 'read',
+  Edit: 'edit',
+  MultiEdit: 'edit',
+  Write: 'write',
+  Glob: 'search',
+  Grep: 'search',
+  WebFetch: 'web',
+  WebSearch: 'web',
+  Task: 'communicate',
+  Agent: 'communicate',
+  TodoWrite: 'plan',
+  Skill: 'skill',
+  mcp__jgents__ask_user: 'ask',
+  mcp__jgents__handoff: 'communicate',
+  mcp__jgents__delegate: 'communicate',
+};
+
+const KIND_ICON: Partial<Record<ActivityKind, string>> = {
+  run: '💻',
+  read: '📖',
+  edit: '✏️',
+  write: '📝',
+  search: '🔎',
+  web: '🌐',
+  plan: '📋',
+  skill: '🧩',
+  ask: '❓',
+  communicate: '📨',
+  think: '💭',
+  respond: '💬',
+  done: '✅',
+  error: '⚠️',
 };
 
 function code(v: unknown): string {
@@ -105,19 +191,40 @@ export function toolLabel(name: string, input: Record<string, unknown>): string 
   return `Used ${name}`;
 }
 
-/** The agent's standing system prompt (appended to Claude Code's own). */
-export function systemPrompt(agent: CrewAgent, crew: readonly CrewAgent[]): string {
-  const mates = crew
-    .filter((a) => a.id !== agent.id)
-    .map((a) => `- @${a.id} (${a.name}): ${a.role || a.description.slice(0, 100)}`)
-    .join('\n');
+/** The agent's standing system prompt (appended to Claude Code's own). `companyFolder`: the CEO's and departments'. */
+export function systemPrompt(agent: CrewAgent, crew: readonly CrewAgent[], companyFolder?: string): string {
+  const line = (a: CrewAgent) => `- @${a.id} (${a.name}): ${a.role || a.description.slice(0, 100)}`;
+  const isCompany = (a: CrewAgent) => a.kind === 'ceo' || a.kind === 'department';
+  const others = crew.filter((a) => a.id !== agent.id);
+  const company = others.filter(isCompany);
+  const rest = others.filter((a) => !isCompany(a));
+  // The company is told apart from the rest of the crew: the CEO counts, reports on and briefs its departments only
+  // (it once counted the user's other agents as departments); the other agents only need to know where it is.
+  let roster: string[];
+  if (isCompany(agent)) {
+    const departments = company.filter((a) => a.kind === 'department');
+    roster = [
+      agent.kind === 'ceo' ? `Your departments (${departments.length}):` : 'The company (its CEO and your fellow departments):',
+      (agent.kind === 'ceo' ? departments : company).map(line).join('\n') || '- (none yet)',
+      ...(rest.length ? ['', 'Other agents on the crew, outside the company (not departments: never count or report on them as part of the company; work with them only when the user asks):', rest.map(line).join('\n')] : []),
+    ];
+  } else {
+    roster = ['The crew:', rest.map(line).join('\n') || '- (you are alone for now)'];
+    const ceo = company.find((a) => a.kind === 'ceo');
+    if (ceo) roster.push('', `The company: @${ceo.id} (${ceo.name}) and ${company.length - 1} departments. Anything for the company goes to @${ceo.id}.`);
+  }
+  const mates = roster.join('\n');
   return [
     `You are ${agent.name} (@${agent.id})${agent.role ? `, ${agent.role}` : ''}. You are one agent of the user's JGENTS crew: a team of`,
     'separate Claude Code sessions, each with its own folder and memory. The user talks to the whole crew from one chat',
     'and a dispatcher sends you the requests that are yours.',
     '',
     `Your working folder: ${agent.folder}`,
-    agent.extraFolders.length ? `You also work in: ${agent.extraFolders.join(', ')} (same product: keep them consistent).` : '',
+    companyFolder
+      ? `The company folder: ${companyFolder} (profile.md: who the company is; outbox/: finished work for the user; log.jsonl: what the company did).`
+      : agent.extraFolders.length
+        ? `You also work in: ${agent.extraFolders.join(', ')} (same product: keep them consistent).`
+        : '',
     KIND_PLAYBOOK[agent.kind],
     agent.instructions,
     '',
@@ -130,8 +237,7 @@ export function systemPrompt(agent: CrewAgent, crew: readonly CrewAgent[]): stri
     '  retrying the same call.',
     '- When part of a request belongs to a teammate, give it to them with mcp__jgents__handoff instead of doing it.',
     '',
-    'The crew:',
-    mates || '- (you are alone for now)',
+    mates,
   ]
     .filter((l, i, all) => l !== '' || all[i - 1] !== '')
     .join('\n');
@@ -167,6 +273,16 @@ export class CrewService {
   private readonly queues = new Map<string, Job[]>();
   private readonly running = new Map<string, Running>();
   private readonly listeners = new Set<CrewListener>();
+  private readonly tickets = new Map<string, Ticket>();
+  /** The ticket each turn opened with `delegate` (until that turn ends). */
+  private readonly runTickets = new Map<string, string>();
+  private readonly companyLog: CompanyLog;
+  /** What each agent is doing, as an office activity (company characters show it): kind, text and a change counter. */
+  private readonly acts = new Map<string, Activity>();
+  private actSeq = 0;
+  /** When each company member's office status last changed. */
+  private readonly statusSince = new Map<string, { status: AgentStatus; since: number }>();
+  private readonly bornAt = Date.now();
   private readonly classify?: Classifier;
   private readonly maxParallel: number;
   private readonly crewDir: string;
@@ -183,6 +299,7 @@ export class CrewService {
       this.emitState(q.agentId);
     });
     this.thread = new Thread(opts.memory ? undefined : join(this.crewDir, 'thread.jsonl'));
+    this.companyLog = new CompanyLog(opts.memory ? undefined : join(companyDir(opts.dataDir), 'log.jsonl'));
     this.loadState();
     this.classify =
       opts.classify ??
@@ -260,6 +377,82 @@ export class CrewService {
     };
   }
 
+  // ---------- the company in the office ----------
+
+  private officeActivity(id: string, kind: ActivityKind, text: string, tool?: string): Activity {
+    return { id: `crew:${id}:${++this.actSeq}`, kind, icon: KIND_ICON[kind] ?? '•', text: text.slice(0, 46), ...(tool ? { tool } : {}), at: Date.now() };
+  }
+
+  /** What an agent is doing now: the line on the crew page (`crewText`) and the office activity of a company member. */
+  private setActivity(id: string, crewText: string, kind: ActivityKind, officeText: string, tool?: string): void {
+    this.activity.set(id, crewText);
+    this.acts.set(id, this.officeActivity(id, kind, officeText, tool));
+  }
+
+  /**
+   * The company as office characters (OfficeSnapshot.company): the CEO and each department, in uniform, in the Main
+   * Office. Working = a turn running or queued; waiting = a question or approval of theirs open on the board; idle
+   * otherwise (they play or take a break until the next brief).
+   */
+  companyMembers(): AgentInfo[] {
+    const now = Date.now();
+    const open = this.board.list().filter((q) => q.status === 'open');
+    const out: AgentInfo[] = [];
+    for (const a of this.roster.list()) {
+      if (a.kind !== 'ceo' && a.kind !== 'department') continue;
+      const face = memberLook(a.id);
+      const ask = open.find((q) => q.agentId === a.id);
+      const busy = this.running.has(a.id) || (this.queues.get(a.id)?.length ?? 0) > 0;
+      const status: AgentStatus = ask ? 'waiting' : busy ? 'working' : 'idle';
+      const prev = this.statusSince.get(a.id);
+      const since = !prev ? this.bornAt : prev.status === status ? prev.since : now;
+      if (!prev || prev.status !== status) this.statusSince.set(a.id, { status, since });
+      const s = this.saved.get(a.id);
+      const act = this.acts.get(a.id);
+      const seed = face?.seed ?? hash32(`company:${a.id}`);
+      // the first CEO is the one the router uses (and the one at the head of the table); ids stay unique
+      const ceo = a.kind === 'ceo' && !out.some((m) => m.id === COMPANY_CEO_ID);
+      const own = `company:${a.id}`;
+      const info: AgentInfo = {
+        id: ceo ? COMPANY_CEO_ID : own === COMPANY_CEO_ID ? `${own}:2` : own,
+        kind: 'main',
+        roomId: COMPANY_ROOM_ID,
+        name: face?.short ?? a.name,
+        look: face?.look ?? (seed & 1 ? 'f' : 'm'),
+        role: a.name,
+        title: a.role,
+        sessionId: s?.sessionId ?? '',
+        account: '',
+        status,
+        recent: act ? [act] : [],
+        tasks: [],
+        startedAt: this.bornAt,
+        lastEventAt: s?.lastAt ?? this.bornAt,
+        statusSince: since,
+        stats: { toolCalls: 0, tokensIn: 0, tokensOut: 0, subagents: 0, costUSD: s?.costUsd ?? 0 },
+        seed,
+        parts: uniform(a.color),
+      };
+      if (ask) info.waitingFor = ask.kind === 'approval' ? tr('aprovar uma permissão') : tr('responder uma pergunta');
+      if (act) info.activity = act;
+      if (a.model) info.model = a.model;
+      out.push(info);
+    }
+    return out;
+  }
+
+  /**
+   * Is `path` one of the company's own folders (a member's workspace or the company folder)? Their Claude Code
+   * sessions are the members' turns, already drawn as the company: the office skips them instead of opening a room.
+   */
+  isCompanyPath(path: string): boolean {
+    if (!path) return false;
+    const company = this.roster.list().filter((a) => a.kind === 'ceo' || a.kind === 'department');
+    if (!company.length) return false;
+    if (insideFolder(path, companyDir(this.opts.dataDir))) return true;
+    return company.some((a) => insideFolder(path, a.folder));
+  }
+
   // ---------- events ----------
 
   subscribe(fn: CrewListener): () => void {
@@ -302,13 +495,15 @@ export class CrewService {
     };
   }
 
-  summary(): { enabled: boolean; open: number; working: number; agents: number } {
+  /** The office's Crew and HQ buttons: on or off, questions waiting, who works, and whether a company is set up. */
+  summary(): { enabled: boolean; open: number; working: number; agents: number; company: boolean } {
     const agents = this.roster.list();
     return {
       enabled: this.enabled,
       open: this.board.list().filter((q) => q.status === 'open').length,
       working: agents.filter((a) => this.running.has(a.id)).length,
       agents: agents.length,
+      company: agents.some((a) => a.kind === 'ceo'),
     };
   }
 
@@ -365,6 +560,7 @@ export class CrewService {
     for (const job of queue) {
       const m = this.thread.get(job.msgId);
       if (m) this.emitMessage({ ...m, status: 'stopped', text: m.text || '_Cancelled before it started._' });
+      this.settle(job, 'stopped', 'Cancelled before it started.');
     }
     if (r) r.turn.stop();
     this.emitState(id);
@@ -404,7 +600,7 @@ export class CrewService {
 
   private async dispatch(user: CrewMessage, agents: CrewAgent[], picked: string | undefined, recent: { agentId: string; user: string }[]): Promise<void> {
     const note: CrewMessage = { id: randomUUID(), at: Date.now(), kind: 'router', text: 'Finding the right agent…', status: 'streaming', replyTo: user.id };
-    const quick = !!picked || /(^|\s)@[\p{L}\p{N}_-]/u.test(user.text) || agents.length === 1;
+    const quick = !!picked || /(^|\s)@[\p{L}\p{N}_-]/u.test(user.text) || agents.length === 1 || agents.some((a) => a.kind === 'ceo');
     if (!quick) this.emitMessage(note, false);
     let result;
     try {
@@ -417,7 +613,8 @@ export class CrewService {
       return;
     }
     const names = result.assignments.map((a) => this.roster.get(a.agentId)).filter((a): a is CrewAgent => !!a);
-    const how = result.via === 'llm' ? 'dispatcher' : result.via === 'keywords' ? 'keywords' : result.via === 'mention' ? 'mention' : result.via === 'picked' ? 'your pick' : 'default';
+    const how = result.via === 'llm' ? 'dispatcher' : result.via === 'keywords' ? 'keywords' : result.via === 'mention' ? 'mention' : result.via === 'picked' ? 'your pick' : result.via === 'ceo' ? 'the company' : 'default';
+    for (const a of result.assignments) if (this.roster.get(a.agentId)?.kind === 'ceo') this.companyLog.append({ type: 'request', agent: a.agentId, text: user.text });
     const lines = result.assignments.map((a) => {
       const ag = this.roster.get(a.agentId);
       return `${ag?.emoji ?? '🤖'} **${ag?.name ?? a.agentId}**${a.reason ? ` · ${a.reason}` : ''}`;
@@ -426,15 +623,120 @@ export class CrewService {
     for (const a of result.assignments) this.enqueue(a.agentId, a.task, { replyTo: user.id });
   }
 
-  private enqueue(agentId: string, prompt: string, opts: { replyTo?: string; origin?: string; handoffs?: number } = {}): void {
+  // ---------- company ----------
+
+  /** Adds the CEO and every department not in the roster yet (and the company folder). */
+  createCompany(): { created: string[]; folder: string } | { error: string } {
+    let folder: string;
+    try {
+      folder = ensureCompanyFolder(this.opts.dataDir);
+    } catch (err) {
+      return { error: `could not create the company folder: ${String((err as Error)?.message ?? err)}` };
+    }
+    const created: string[] = [];
+    for (const spec of companyAgents(this.opts.dataDir)) {
+      if (this.roster.get(spec.id)) continue;
+      const a = this.roster.create(spec);
+      if ('error' in a) return created.length ? { created, folder } : a;
+      created.push(a.id);
+    }
+    if (created.length) {
+      this.emit('agents', this.roster.list());
+      for (const id of created) this.emitState(id);
+      this.system(`🏢 The company is set up: the CEO and ${created.length - (created.includes('ceo') ? 1 : 0)} departments. Every request without an @mention now goes to the CEO. Tell them who you are in ${join(folder, 'profile.md')}.`);
+    }
+    return { created, folder };
+  }
+
+  /** The company for the console and the office: who is in it, what they are doing and what happened lately. */
+  company(): CrewCompany {
+    const folder = companyDir(this.opts.dataDir);
+    const agents = this.roster.list();
+    const ceo = agents.find((a) => a.kind === 'ceo');
+    const departments = agents.filter((a) => a.kind === 'department');
+    let outbox: CompanyFile[] = [];
+    try {
+      const dir = join(folder, 'outbox');
+      outbox = readdirSync(dir)
+        .map((name) => {
+          const st = statSync(join(dir, name));
+          return st.isFile() ? { name, at: st.mtimeMs, bytes: st.size } : undefined;
+        })
+        .filter((f): f is CompanyFile => !!f && !f.name.startsWith('.'))
+        .sort((a, b) => b.at - a.at)
+        .slice(0, 50);
+    } catch {
+      // no outbox yet
+    }
+    return {
+      folder,
+      ...(ceo ? { ceo } : {}),
+      departments,
+      states: [...(ceo ? [ceo] : []), ...departments].map((a) => this.stateOf(a.id)),
+      log: this.companyLog.recent(300),
+      outbox,
+      members: this.companyMembers(),
+    };
+  }
+
+  /** One finished file in the company outbox (the HQ console's viewer). */
+  outboxFile(name: string): CompanyFileText | undefined {
+    return readOutboxFile(this.opts.dataDir, name);
+  }
+
+  /**
+   * A job is over: when it was a brief, its final reply is its report. A turn that briefed others itself does not report
+   * yet: the reports it waits for come back as a new job, and that one reports for it.
+   */
+  private settle(job: Job, status: Report['status'], text: string, costUsd?: number): void {
+    if (this.runTickets.has(job.runId)) {
+      this.runTickets.delete(job.runId);
+      return;
+    }
+    if (!job.ticket) return;
+    const t = this.tickets.get(job.ticket.id);
+    if (!t || !t.pending.has(job.ticket.key)) return;
+    t.pending.delete(job.ticket.key);
+    t.reports.push({ agentId: job.agentId, status, text, costUsd });
+    this.companyLog.append({ type: 'report', agent: job.agentId, to: t.owner, ticket: t.id, status, text, costUsd });
+    if (!t.pending.size) this.closeTicket(t);
+  }
+
+  /** Every brief has reported: the reports go back to the agent that sent them, in one message. */
+  private closeTicket(t: Ticket): void {
+    this.tickets.delete(t.id);
+    const owner = this.roster.get(t.owner);
+    const request = t.request ? this.thread.get(t.request)?.text : undefined;
+    const parts = t.reports.map((r) => {
+      const a = this.roster.get(r.agentId);
+      const body = r.text.length > REPORT_MAX ? `${r.text.slice(0, REPORT_MAX)}\n[report cut here]` : r.text;
+      return `## ${a?.name ?? r.agentId} (@${r.agentId}) · ${r.status === 'done' ? 'done' : r.status === 'error' ? 'failed' : 'stopped'}\n\n${body || '(no report)'}`;
+    });
+    const n = t.reports.length;
+    const next =
+      owner?.kind === 'ceo'
+        ? 'Now check the work, fill any gap, combine it into one deliverable in the company outbox, and answer the user: a short summary, the file path(s), and what needs their decision.'
+        : 'Now finish your own brief with these results; your final reply is your report.';
+    const prompt = [`The ${n === 1 ? 'agent' : `${n} agents`} you briefed ${n === 1 ? 'has' : 'have'} reported${request ? ` (the request: "${request.replace(/\s+/g, ' ').slice(0, 300)}")` : ''}.`, '', ...parts, '', next].join('\n');
+    this.enqueue(t.owner, prompt, { origin: `reports from ${n} ${n === 1 ? 'department' : 'departments'}`, replyTo: t.request, ticket: t.parent });
+  }
+
+  /** Queues a turn. `ticket` without a key opens a new slot on that ticket (a brief); with a key it reports in that slot. */
+  private enqueue(agentId: string, prompt: string, opts: { replyTo?: string; origin?: string; handoffs?: number; ticket?: { id: string; key?: string } } = {}): string {
     const msg: CrewMessage = { id: randomUUID(), at: Date.now(), kind: 'agent', agentId, text: '', status: 'queued', steps: [], replyTo: opts.replyTo, origin: opts.origin };
     this.emitMessage(msg, false);
-    const job: Job = { runId: randomUUID(), agentId, prompt, msgId: msg.id, handoffs: opts.handoffs ?? 0 };
+    let ticket: TicketRef | undefined;
+    if (opts.ticket) {
+      ticket = { id: opts.ticket.id, key: opts.ticket.key ?? msg.id };
+      if (!opts.ticket.key) this.tickets.get(opts.ticket.id)?.pending.set(msg.id, agentId);
+    }
+    const job: Job = { runId: randomUUID(), agentId, prompt, msgId: msg.id, handoffs: opts.handoffs ?? 0, replyTo: opts.replyTo, ticket };
     const q = this.queues.get(agentId) ?? [];
     q.push(job);
     this.queues.set(agentId, q);
     this.emitState(agentId);
     this.pump();
+    return msg.id;
   }
 
   private pump(): void {
@@ -471,6 +773,7 @@ export class CrewService {
     const fail = (error: string) => {
       this.lastError.set(job.agentId, error);
       this.emitMessage({ ...msg, status: 'error', text: `⚠️ ${error}` });
+      this.settle(job, 'error', error);
       this.emitState(job.agentId);
       this.pump();
     };
@@ -478,6 +781,14 @@ export class CrewService {
     if (!this.opts.claudeBin) return fail(this.reason ?? 'Claude Code was not found');
     // Built-in workspaces are created on demand; a project folder must exist.
     if (agent.folder.startsWith(workspacesDir(this.opts.dataDir))) this.ensureDir(agent.folder);
+    const company = agent.kind === 'ceo' || agent.kind === 'department';
+    if (company) {
+      try {
+        ensureCompanyFolder(this.opts.dataDir);
+      } catch {
+        // the turn still runs; the agent reports what it cannot reach
+      }
+    }
     try {
       if (!statSync(agent.folder).isDirectory()) return fail(`${agent.folder} is not a folder`);
     } catch {
@@ -490,7 +801,7 @@ export class CrewService {
       return fail(`could not write the bridge config: ${String((err as Error)?.message ?? err)}`);
     }
     this.lastError.delete(agent.id);
-    this.activity.set(agent.id, 'Thinking…');
+    this.setActivity(agent.id, 'Thinking…', 'think', tr('Pensando…'));
     const saved = this.savedOf(agent.id);
     const sessionId = job.retried ? undefined : saved.sessionId;
     const forkSession = !!sessionId && !!saved.forkNext;
@@ -511,13 +822,13 @@ export class CrewService {
       // MCP tool calls (ask_user, approvals) may wait a long time for the user.
       MCP_TOOL_TIMEOUT: String(24 * 3600 * 1000),
     };
-    const allowed = [...new Set([...agent.allowedTools, 'mcp__jgents__ask_user', 'mcp__jgents__handoff'])];
+    const allowed = [...new Set([...agent.allowedTools, 'mcp__jgents__ask_user', 'mcp__jgents__handoff', 'mcp__jgents__delegate'])];
     const turn = runTurn(
       {
         bin: this.opts.claudeBin,
         cwd: agent.folder,
         prompt: job.prompt,
-        systemPrompt: systemPrompt(agent, this.roster.list()),
+        systemPrompt: systemPrompt(agent, this.roster.list(), company ? companyDir(this.opts.dataDir) : undefined),
         mcpConfigFile: mcpFile,
         sessionId,
         forkSession,
@@ -538,7 +849,8 @@ export class CrewService {
             text += '\n\n';
             this.emit('delta', { id: msg.id, text: '\n\n' });
           }
-          this.activity.set(agent.id, 'Writing…');
+          this.setActivity(agent.id, 'Writing…', 'respond', tr('Escrevendo a resposta'));
+          this.emitState(agent.id);
         },
         onText: (d) => {
           text += d;
@@ -548,14 +860,15 @@ export class CrewService {
         onToolStart: (id, name, input) => {
           const label = toolLabel(name, input);
           steps.push({ id, tool: name, label, status: 'running' });
-          this.activity.set(agent.id, label.replace(/`/g, ''));
+          const plain = label.replace(/`/g, '');
+          this.setActivity(agent.id, plain, TOOL_KIND[name] ?? (name.startsWith('mcp__') ? 'mcp' : 'other'), plain, name);
           this.emitMessage(live(), false);
           this.emitState(agent.id);
         },
         onToolEnd: (id, isError) => {
           const s = steps.find((x) => x.id === id);
           if (s) s.status = isError ? 'error' : 'done';
-          this.activity.set(agent.id, 'Thinking…');
+          this.setActivity(agent.id, 'Thinking…', 'think', tr('Pensando…'));
           this.emitMessage(live(), false);
         },
       },
@@ -566,6 +879,8 @@ export class CrewService {
     void turn.done.then((r) => {
       this.running.delete(agent.id);
       this.activity.delete(agent.id);
+      const failed = !r.ok && !r.stopped;
+      this.acts.set(agent.id, this.officeActivity(agent.id, failed ? 'error' : 'done', failed ? tr('Algo deu errado') : tr('Concluído')));
       if (r.sessionMissing && sessionId && !job.retried) {
         // The saved session is gone (deleted, or another machine): start a new one with the same request.
         saved.sessionId = undefined;
@@ -597,6 +912,8 @@ export class CrewService {
         durationMs: r.durationMs,
         sessionId: r.sessionId ?? saved.sessionId,
       });
+      if (agent.kind === 'ceo' && r.ok) this.companyLog.append({ type: 'answer', agent: agent.id, text: finalText, costUsd: r.costUsd });
+      this.settle(job, r.ok ? 'done' : r.stopped ? 'stopped' : 'error', finalText, r.costUsd);
       for (const q of this.board.runEnded(job.runId)) this.followUp(q);
       this.emitState(agent.id);
       this.pump();
@@ -703,6 +1020,53 @@ export class CrewService {
       origin: 'handoff',
     });
     this.enqueue(to.id, `Handoff from ${from.name} (@${from.id}), on behalf of the user:\n\n${task}`, { origin: `handoff from ${from.name}`, handoffs: depth });
+    return { name: to.name };
+  }
+
+  /**
+   * `delegate` from an agent's turn: briefs another agent; its report comes back to the caller with the others of the
+   * same turn (see settle and closeTicket).
+   */
+  bridgeDelegate(raw: Record<string, unknown>): { name: string } | { error: string } {
+    const from = this.roster.get(String(raw.from ?? ''));
+    const wanted = String(raw.agent ?? '').trim().replace(/^@/, '').toLowerCase();
+    const to = this.roster.list().find((a) => a.id === wanted || a.name.toLowerCase() === wanted);
+    const task = String(raw.task ?? '').trim().slice(0, TEXT_MAX);
+    if (!from) return { error: 'unknown agent' };
+    if (!to) return { error: `no agent "${wanted}" in the crew (ids: ${this.roster.list().map((a) => a.id).join(', ')})` };
+    if (to.id === from.id) return { error: 'you cannot brief yourself' };
+    if (!task) return { error: 'empty brief' };
+    const run = typeof raw.run === 'string' ? raw.run : '';
+    const parent = this.running.get(from.id)?.job;
+    if (!parent || parent.runId !== run) return { error: 'delegate only works during your own turn' };
+    const depth = parent.handoffs + 1;
+    if (depth > MAX_HANDOFFS) return { error: 'too many briefs in a chain; do it yourself or ask the user' };
+    let t = this.tickets.get(this.runTickets.get(run) ?? '');
+    if (!t) {
+      t = { id: randomUUID(), owner: from.id, ownerRun: run, parent: parent.ticket, request: parent.replyTo, pending: new Map(), reports: [], briefs: 0 };
+      this.tickets.set(t.id, t);
+      this.runTickets.set(run, t.id);
+    }
+    if (t.briefs >= MAX_BRIEFS) return { error: `at most ${MAX_BRIEFS} briefs per turn` };
+    t.briefs++;
+    this.emitMessage({
+      id: randomUUID(),
+      at: Date.now(),
+      kind: 'router',
+      text: `${from.emoji} **${from.name}** briefed ${to.emoji} **${to.name}**`,
+      targets: [to.id],
+      agentId: from.id,
+      status: 'done',
+      origin: 'brief',
+      replyTo: parent.replyTo,
+    });
+    this.companyLog.append({ type: 'brief', agent: from.id, to: to.id, ticket: t.id, text: task });
+    this.enqueue(to.id, `Brief from ${from.name} (@${from.id}), on behalf of the user:\n\n${task}\n\nWhen you finish, your final reply goes back to ${from.name} as your report.`, {
+      origin: `brief from ${from.name}`,
+      handoffs: depth,
+      replyTo: parent.replyTo,
+      ticket: { id: t.id },
+    });
     return { name: to.name };
   }
 

@@ -51,4 +51,10 @@ describe('ditado', () => {
     now += 31_000;
     expect(s.get('d4')).toMatchObject({ status: 'failed', error: 'o auxiliar do computador não buscou o áudio' });
   });
+
+  it('status: says what is missing to transcribe here (and nothing more once it works)', () => {
+    expect(new DictationService({ missing: 'whisper-cli (scoop install whisper-cpp)' }).status()).toEqual({ available: false, missing: 'whisper-cli (scoop install whisper-cpp)' });
+    expect(new DictationService({}).status()).toEqual({ available: false });
+    expect(new DictationService({ transcriber: async () => ({ text: 'hi', lang: 'en' }), missing: 'x' }).status()).toEqual({ available: true });
+  });
 });

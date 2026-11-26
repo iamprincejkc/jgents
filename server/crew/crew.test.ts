@@ -467,7 +467,7 @@ describe('http + MCP bridge', () => {
       send(1, 'initialize', { protocolVersion: '2025-06-18' });
       send(2, 'tools/list');
       const list = await until(() => replies.get(2));
-      expect((list.result as { tools: { name: string }[] }).tools.map((t) => t.name)).toEqual(['ask_user', 'approve', 'handoff']);
+      expect((list.result as { tools: { name: string }[] }).tools.map((t) => t.name)).toEqual(['ask_user', 'approve', 'handoff', 'delegate']);
       send(3, 'tools/call', { name: 'ask_user', arguments: { question: 'Vertical or wide?', options: ['9:16', '16:9'] } });
       const q = await until(() => crew.snapshot().questions.find((x) => x.status === 'open'));
       expect(q).toMatchObject({ agentId: 'ho-oh', text: 'Vertical or wide?', options: ['9:16', '16:9'] });

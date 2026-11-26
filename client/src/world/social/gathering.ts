@@ -5,7 +5,9 @@ import type { Dir, HeldItem, Pose } from '../../art/api';
 import { hasTrait, type Bond, type Persona, type TraitId } from './persona';
 import { tr } from '../../../../shared/i18n';
 
-export type GatherKind = 'tv' | 'videogame' | 'arcade' | 'pingpong' | 'kitchen' | 'talk' | 'rps' | 'mirror';
+export type GatherKind = 'tv' | 'videogame' | 'arcade' | 'pingpong' | 'kitchen' | 'talk' | 'rps' | 'mirror'
+  // entertainment wing
+  | 'billiards' | 'pickleball' | 'karaoke' | 'coffeebar';
 export type Role = 'player' | 'watcher' | 'talker';
 export type Program = 'futebol' | 'novela' | 'desenho';
 export type Gesture = 'rock' | 'paper' | 'scissors';
@@ -36,6 +38,10 @@ export const KINDS: Readonly<Record<GatherKind, KindInfo>> = {
   talk: { label: tr('Conversando'), emoji: '💬', min: 2, max: 2 },
   rps: { label: tr('Jokenpô'), emoji: '✊', min: 2, max: 4, match: true },
   mirror: { label: tr('Se arrumando no espelho'), emoji: '💄', min: 1, max: 2, solo: true },
+  billiards: { label: tr('Jogando sinuca'), emoji: '🎱', min: 2, max: 5, match: true },
+  pickleball: { label: tr('Jogando pickleball'), emoji: '🎾', min: 2, max: 6, match: true },
+  karaoke: { label: tr('Cantando no karaokê'), emoji: '🎤', min: 2, max: 7 },
+  coffeebar: { label: tr('Café na cafeteria'), emoji: '☕', min: 2, max: 4 },
 };
 
 export interface Member {
@@ -93,6 +99,10 @@ export interface Gathering {
   lastSpeaker: string | null;
   /** Falas agendadas (ex.: o "bora!" de quem foi convidado, um pouco depois do convite). */
   pending: { id: string; at: number; text: string }[];
+  /** Billiards: whose turn it is (index into players()). */
+  turn?: 0 | 1;
+  /** Billiards: the last shot (when, by whom, whether it sank a ball, shot count) for the renderer to animate. */
+  shot?: { at: number; by: 0 | 1; pot: boolean; n: number };
 }
 
 export function ownerTag(g: Pick<Gathering, 'id'>): string {
@@ -118,24 +128,29 @@ const BASE: Readonly<Record<GatherKind, number>> = {
   talk: 8,
   rps: 8,
   mirror: 2,
+  // the entertainment wing is the newest part of the office: its games come up more often
+  billiards: 16,
+  pickleball: 16,
+  karaoke: 10,
+  coffeebar: 11,
 };
 
 /** Quanto cada traço multiplica a vontade de cada roda. */
 const TRAIT_K: Partial<Record<TraitId, Partial<Record<GatherKind, number>>>> = {
   series: { tv: 3 },
-  games: { videogame: 3, arcade: 2.5 },
-  esporte: { pingpong: 3, tv: 1.3 },
-  competicao: { pingpong: 1.8, videogame: 1.8, rps: 1.8, arcade: 1.5 },
-  apostas: { rps: 3.5 },
-  fofoca: { kitchen: 2.5, talk: 1.8 },
-  cafeina: { kitchen: 2.2 },
-  piadas: { kitchen: 1.5, talk: 1.5 },
-  vaidade: { mirror: 5 },
-  timidez: { talk: 0.6, kitchen: 0.7, rps: 0.6, pingpong: 0.7, videogame: 0.8 },
-  sonecas: { tv: 1.5, pingpong: 0.6 },
+  games: { videogame: 3, arcade: 2.5, billiards: 1.3 },
+  esporte: { pingpong: 3, tv: 1.3, pickleball: 3, billiards: 1.4 },
+  competicao: { pingpong: 1.8, videogame: 1.8, rps: 1.8, arcade: 1.5, billiards: 1.8, pickleball: 1.8 },
+  apostas: { rps: 3.5, billiards: 1.6 },
+  fofoca: { kitchen: 2.5, talk: 1.8, coffeebar: 1.8 },
+  cafeina: { kitchen: 2.2, coffeebar: 3 },
+  piadas: { kitchen: 1.5, talk: 1.5, karaoke: 1.8 },
+  vaidade: { mirror: 5, karaoke: 2.5 },
+  timidez: { talk: 0.6, kitchen: 0.7, rps: 0.6, pingpong: 0.7, videogame: 0.8, karaoke: 0.3, pickleball: 0.7 },
+  sonecas: { tv: 1.5, pingpong: 0.6, pickleball: 0.5 },
   economia: { rps: 0.4 },
-  calma: { talk: 1.3, kitchen: 1.2, rps: 0.5, pingpong: 0.7 },
-  leitura: { tv: 0.8 },
+  calma: { talk: 1.3, kitchen: 1.2, rps: 0.5, pingpong: 0.7, coffeebar: 1.4, karaoke: 0.6 },
+  leitura: { tv: 0.8, coffeebar: 1.3 },
 };
 
 export function kindWeight(kind: GatherKind, p: Persona): number {
@@ -225,7 +240,7 @@ export function winChance(skillA: number, skillB: number): number {
 }
 
 /** Pontos para vencer cada jogo. */
-export const TARGET: Readonly<Partial<Record<GatherKind, number>>> = { pingpong: 5, videogame: 2, arcade: 1 };
+export const TARGET: Readonly<Partial<Record<GatherKind, number>>> = { pingpong: 5, videogame: 2, arcade: 1, billiards: 4, pickleball: 7 };
 
 /** Ícone de cada gesto acima da cabeça (contrato da arte). */
 export const GESTURE_ICON = { rock: 'hand_rock', paper: 'hand_paper', scissors: 'hand_scissors' } as const;

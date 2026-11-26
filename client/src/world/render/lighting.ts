@@ -5,10 +5,11 @@
 // Custo: de dia nada é desenhado. Fora isso, o mapa (meia resolução do mundo) só é refeito quando
 // a chave de luz muda (hora em passos de poucos segundos, luz das salas, ocupação das áreas comuns,
 // montagem de salas); por frame, um drawImage em 'multiply' e alguns sprites de brilho em cache.
-import { TILE, type ArtModule, type ScreenMode } from '../../art/api';
+import { NEON_COLORS, TILE, type ArtModule, type ScreenMode } from '../../art/api';
 import { mulberry32 } from '../../../../shared/hash';
-import { BUILDING_H, COL_W, CORRIDOR_H, CORRIDOR_Y } from '../constants';
-import type { ExteriorLayout, SlotShell } from '../layout/exterior';
+import { HOUSE_W, houseH } from '../constants';
+import type { ExteriorLayout } from '../layout/exterior';
+import { hallRects } from '../layout/geometry';
 import type { RoomState } from '../sim/room-state';
 import type { Sim } from '../sim/sim';
 import { buildAnim } from './anim';
@@ -34,8 +35,6 @@ const FIREFLIES = 26;
 export interface LightScene {
   readonly areas: ReadonlyMap<string, AreaVis>;
   readonly exterior: ExteriorLayout;
-  readonly shells: readonly SlotShell[];
-  readonly shellWindows: readonly WallVis[];
   readonly cars: readonly { x: number; y: number; dir: 1 | -1 }[];
   roomInSlot(slot: number): RoomState | undefined;
   deskScreen(f: FurnVis, area: AreaVis): ScreenMode;
@@ -59,6 +58,11 @@ interface Firefly {
 }
 
 const halos = new Map<string, HTMLCanvasElement>();
+
+function hexRgb(c: string): Rgb {
+  const n = parseInt(c.slice(1, 7), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
 
 /**
  * Halo para o mapa de luz: gradiente radial da cor `c` (opaca no centro) até transparente. Desenhado
@@ -250,10 +254,10 @@ export class Lighting {
     }
   }
 
-  /** Copa, lounge e banheiros: luz por presença. Recepção e corredor ficam sempre acesos. */
+  /** Copa, lounge, banheiros, lazer e salas de convivência: luz por presença. Recepção, escritório central e corredores ficam sempre acesos. */
   private presenceLit(vis: AreaVis): boolean {
     const kind = vis.layout.kind;
-    return kind === 'cafe' || kind === 'lounge' || kind === 'restroom';
+    return kind === 'cafe' || kind === 'lounge' || kind === 'restroom' || kind === 'coffeebar' || kind === 'billiards' || kind === 'court' || kind === 'karaoke' || kind === 'amenity';
   }
 
   private someoneIn(r: { x: number; y: number; w: number; h: number }): boolean {
@@ -320,12 +324,11 @@ export class Lighting {
   /** Tudo o que muda o mapa, em passos discretos (evita refazê-lo a cada frame). */
   private lightKey(scene: LightScene, now: number): string {
     const a = this.ambient;
-    let k = `${Math.round(a.night * 200)}|${a.outside.join(',')}|${a.inside.join(',')}|${a.dim.join(',')}|${this.sim.building.cols}`;
+    let k = `${Math.round(a.night * 200)}|${a.outside.join(',')}|${a.inside.join(',')}|${a.dim.join(',')}|${this.sim.building.floors}`;
     for (const vis of scene.areas.values()) {
       const { lit, cover } = this.areaLight(vis, now);
       k += `|${vis.id}:${Math.round(lit * 24)}:${Math.round(cover * 20)}`;
     }
-    for (const sh of scene.shells) if (scene.roomInSlot(sh.slot)) k += `|s${sh.slot}`;
     return k;
   }
 
@@ -340,14 +343,6 @@ export class Lighting {
     // daqui em diante, coordenadas de mundo
     m.setTransform(1 / MAP_SCALE, 0, 0, 1 / MAP_SCALE, -this.mapX / MAP_SCALE, -this.mapY / MAP_SCALE);
     const corridorLit = rgbCss(mixRgb(amb.inside, amb.dim, 0.18));
-    // fechamentos do corredor nos slots vazios (fachada com janelas ao norte, mureta ao sul)
-    for (const sh of scene.shells) {
-      if (scene.roomInSlot(sh.slot)) continue;
-      const r = sh.rect;
-      m.fillStyle = corridorLit;
-      if (r.y === 0) m.fillRect(r.x * TILE, (r.y + r.h - 2) * TILE, r.w * TILE, 2 * TILE);
-      else m.fillRect(r.x * TILE, r.y * TILE, r.w * TILE, TILE);
-    }
     const lit = new Map<AreaVis, number>();
     for (const vis of scene.areas.values()) {
       const l = this.areaLight(vis, now);
@@ -402,7 +397,15 @@ export class Lighting {
       for (const f of vis.furniture) {
         if (f.kind === 'floor_lamp') halo(lamp, f.ax, f.ay - 6, 92, 66, a);
         else if (f.kind === 'vending_machine') halo(cool, f.ax, f.ay + 4, 52, 34, 0.9 * a);
-        else if (f.kind === 'arcade') halo(arcade, f.ax, f.ay + 4, 44, 30, 0.8 * a);
+        else if (f.kind === 'arcade' || f.kind === 'jukebox') halo(arcade, f.ax, f.ay + 4, 44, 30, 0.8 * a);
+        // the pendant lamp over the pool table
+        else if (f.kind === 'pool_table') halo(lamp, f.ax, f.ay - 14, 104, 58, a);
+        else if (f.kind === 'espresso_machine') halo(lamp, f.ax, f.ay + 6, 40, 26, 0.6 * a);
+      }
+      for (const w of vis.layout.wallItems) {
+        if (w.kind !== 'neon_sign') continue;
+        const c = NEON_COLORS[w.variant ?? ''];
+        if (c) halo(haloSprite(hexRgb(c), 64), w.cx, w.baseY - 10, 104, 44, 0.75 * a);
       }
     }
     for (const prop of scene.exterior.props) {
@@ -425,29 +428,26 @@ export class Lighting {
     halo: (img: HTMLCanvasElement, cx: number, cy: number, w: number, h: number, a: number) => void,
     warm: HTMLCanvasElement,
   ): void {
-    const bw = this.sim.building.cols * COL_W * TILE;
-    const bh = BUILDING_H * TILE;
+    const bw = HOUSE_W * TILE;
+    const floors = this.sim.building.floors;
+    const bh = houseH(floors) * TILE;
     for (const [vis, l] of lit) {
       if (l < 0.3) continue;
       const r = vis.layout.rect;
       if (r.y === 0) {
         // janelas da parede norte -> gramado ao norte do prédio
         for (const w of vis.wallItems) if (w.kind === 'window') halo(warm, w.cx, -12, 58, 30, 0.55 * k * l);
-      } else if (vis.layout.kind !== 'corridor' && r.y + r.h >= BUILDING_H) {
+      } else if (vis.layout.kind !== 'corridor' && r.y + r.h >= houseH(floors)) {
         // salas ao sul: brilho suave sobre a cerca viva e a calçada
         for (const fx of [0.25, 0.75]) halo(warm, (r.x + r.w * fx) * TILE, bh + 16, 96, 30, 0.35 * k * l);
       }
     }
-    // fachadas de vidro do corredor (entrada a oeste e ponta leste)
-    const cy = (CORRIDOR_Y + CORRIDOR_H / 2) * TILE;
-    halo(warm, -20, cy, 56, 92, 0.6 * k);
-    halo(warm, bw + 20, cy, 56, 92, 0.45 * k);
-    // janelas do corredor que dão para os pátios dos slots vazios
-    for (const w of scene.shellWindows) {
-      const slot = Number(w.areaId.slice(6));
-      if (scene.roomInSlot(slot)) continue;
-      halo(warm, w.cx, w.baseY - 2 * TILE - 14, 52, 28, 0.5 * k);
-    }
+    // fachadas de vidro nas duas pontas de cada corredor (a oeste do corredor norte, a entrada)
+    hallRects(floors).forEach((r, i) => {
+      const cy = (r.y + r.h / 2) * TILE;
+      halo(warm, -20, cy, 56, 92, (i === 0 ? 0.6 : 0.45) * k);
+      halo(warm, bw + 20, cy, 56, 92, 0.45 * k);
+    });
   }
 
   // =================================================================== brilhos por frame
@@ -473,22 +473,32 @@ export class Lighting {
           const mode = scene.deskScreen(f, vis);
           if (mode === 'off') continue;
           // quem trabalha à noite fica com o rosto iluminado pela tela
-          ctx.globalAlpha = (mode === 'idle' ? 0.2 : 0.35) * k;
+          ctx.globalAlpha = (mode === 'idle' || mode === 'standby' ? 0.2 : 0.35) * k;
           ctx.drawImage(cool, Math.round(f.ax - 24), Math.round(f.ay - 34));
         } else if (f.kind === 'floor_lamp' && n > 0.2 && (!room || room.lightOn)) {
           // bulbo aceso (o halo no chão está no mapa de luz)
           const g = this.lampHead(f);
           ctx.globalAlpha = 0.5 * n;
           ctx.drawImage(warm, Math.round(g.x - 16), Math.round(g.y - 16), 32, 32);
-        } else if (f.kind === 'vending_machine' || f.kind === 'arcade') {
+        } else if (f.kind === 'vending_machine' || f.kind === 'arcade' || f.kind === 'jukebox') {
           ctx.globalAlpha = 0.25 * k;
           ctx.drawImage(cool, Math.round(f.ax - 24), Math.round(f.ay - 36));
+        }
+      }
+      // neon lettering burns brighter after dark
+      if (n > 0.2) {
+        for (const w of vis.layout.wallItems) {
+          if (w.kind !== 'neon_sign' || !inView(w.cx, w.baseY, 80)) continue;
+          const c = NEON_COLORS[w.variant ?? ''];
+          if (!c) continue;
+          ctx.globalAlpha = 0.32 * n;
+          ctx.drawImage(glowSprite(c, 64), Math.round(w.cx - 48), Math.round(w.baseY - 40), 96, 52);
         }
       }
       // TV de parede ligada: luz azulada na frente da tela
       if (n > 0.2) {
         for (const w of vis.wallItems) {
-          if (w.kind !== 'tv' || !inView(w.cx, w.baseY, 60)) continue;
+          if ((w.kind !== 'tv' && w.kind !== 'karaoke_screen') || !inView(w.cx, w.baseY, 60)) continue;
           ctx.globalAlpha = 0.3 * n;
           ctx.drawImage(cool, Math.round(w.cx - 28), Math.round(w.baseY - 30), 56, 56);
         }
@@ -543,11 +553,6 @@ export class Lighting {
       if (!ws.length) continue;
       const p = vis.px;
       draw(ws, { x: p.x, y: p.y + 2 * TILE, w: p.w, h: p.h - 3 * TILE });
-    }
-    for (const sh of scene.shells) {
-      if (sh.rect.y !== 0 || scene.roomInSlot(sh.slot)) continue;
-      const ws = scene.shellWindows.filter((w) => w.areaId === `shell:${sh.slot}`);
-      draw(ws, { x: sh.rect.x * TILE, y: CORRIDOR_Y * TILE, w: sh.rect.w * TILE, h: CORRIDOR_H * TILE });
     }
   }
 

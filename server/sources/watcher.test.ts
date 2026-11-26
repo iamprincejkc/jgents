@@ -123,7 +123,7 @@ describe('ClaudeWatcher', () => {
     const a = c.agent(id)!;
     expect(a).toMatchObject({ kind: 'main', status: 'working', title: 'Carrinho de compras', role: 'Agente principal', account: '.claude', roomId: CWD });
     expect(a.activity?.text).toBe('Lendo Cart.tsx');
-    expect(snap.accounts[0]).toMatchObject({ id: '.claude', short: 'A', sessions: 1 });
+    expect(snap.accounts[0]).toMatchObject({ id: '.claude', short: 'C', name: 'Claude', sessions: 1 });
     expect(c.notices).toEqual([]);
     expect(c.office.recentFeed(10).map((f) => f.activity.kind)).toEqual(['prompt', 'read']);
   });
@@ -461,7 +461,7 @@ describe('ClaudeWatcher', () => {
     expect(a.role).toBe('Agente frinus');
     const texts = c.notices.map((n) => n.text);
     expect(texts).toContain('🏗️ Nova sala: loja');
-    expect(texts).toContain(`👋 ${a.name} chegou em loja (Conta A)`);
+    expect(texts).toContain(`👋 ${a.name} chegou em loja (Claude)`);
   });
 });
 

@@ -174,11 +174,13 @@ export function showsUsageAge(a: Pick<AccountInfo, 'usage' | 'usageStatus' | 'pr
   return state === 'stale' || (isCodex(a) && state !== 'empty');
 }
 
-/** Linha embaixo do nome: e-mail; no Codex (sem e-mail), o plano; nas outras, a pasta. */
+/**
+ * Line next to the name: the plan when it is known, nothing otherwise. The e-mail and the folder
+ * stay in the card's tooltip, so the top bar stays short and clean.
+ */
 export function usageSubtitle(a: Pick<AccountInfo, 'email' | 'plan' | 'configDir' | 'provider'>): string {
-  if (a.email) return a.email;
-  if (isCodex(a)) return a.plan ? tr('plano {0}', [a.plan]) : 'Codex';
-  return a.configDir;
+  if (a.plan) return tr('plano {0}', [a.plan]);
+  return '';
 }
 
 /** Mensagem no lugar das barras (estados sem números): [longa, curta]. */

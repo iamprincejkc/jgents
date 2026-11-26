@@ -42,11 +42,13 @@ describe('cartão de uso de uma conta do Codex', () => {
     expect(usageMessage(codex())).toEqual(['sem dados ainda', 'sem dados']);
     expect(codexUsageNote(codex(), 0)).toBe('Não precisa instalar nada: os números chegam com a próxima sessão do Codex.');
     expect(usageSubtitle(codex())).toBe('plano Team');
-    expect(usageSubtitle(codex({ plan: undefined }))).toBe('Codex');
-    // Claude Code: como antes.
+    // the name already says Codex: no plan, nothing next to it
+    expect(usageSubtitle(codex({ plan: undefined }))).toBe('');
+    // Claude Code: the plan when known; the e-mail and the folder stay in the tooltip, off the top bar
     expect(usageMessage({ usageStatus: 'disabled' })).toEqual(['sem dados de uso', 'sem dados']);
-    expect(usageSubtitle({ email: 'a@b.c', configDir: '~/.claude' })).toBe('a@b.c');
-    expect(usageSubtitle({ configDir: '~/.claude' })).toBe('~/.claude');
+    expect(usageSubtitle({ email: 'a@b.c', configDir: '~/.claude' })).toBe('');
+    expect(usageSubtitle({ email: 'a@b.c', plan: 'Max', configDir: '~/.claude' })).toBe('plano Max');
+    expect(usageSubtitle({ configDir: '~/.claude' })).toBe('');
     expect(codexUsageNote({ usageStatus: 'ok' }, 0)).toBe('');
   });
 });

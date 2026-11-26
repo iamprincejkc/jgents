@@ -116,6 +116,8 @@ const side = h(
     h('div', { class: 'side__brand' }, 'JGENTS Crew', h('small', {}, 'One chat, many agents')),
   ),
   h('button', { class: 'side__new', type: 'button', on: { click: () => newAgent() } }, svg(ICON.plus), 'New agent'),
+  companyBtn(),
+  hqLink(),
   h('div', { class: 'side__label' }, 'Agents'),
   sideList,
   sideFoot,
@@ -170,9 +172,51 @@ scroller.addEventListener('scroll', () => head.classList.toggle('is-scrolled', s
 
 // ---------------------------------------------------------------- agents (left)
 
+/** Once the company exists: its HQ console (talk to the CEO, by voice too, and see every department). */
+function hqLink(): HTMLElement {
+  return h(
+    'a',
+    { class: 'side__new side__hq', attrs: { href: '/hq', title: 'The CEO console: talk to the CEO (typing or voice), reports, deliverables and every department at a glance.' } },
+    h('span', { attrs: { 'aria-hidden': 'true' } }, '🏢'),
+    'Open HQ',
+  );
+}
+
+/** One click adds the CEO and the departments; hidden once the company exists. */
+function companyBtn(): HTMLElement {
+  return h(
+    'button',
+    {
+      class: 'side__new side__company',
+      type: 'button',
+      title: 'Adds a CEO and 16 departments (Finance, HR, Legal, Marketing…). You write to the CEO; it briefs the departments and answers you once.',
+      on: { click: () => void setUpCompany() },
+    },
+    h('span', { attrs: { 'aria-hidden': 'true' } }, '🏢'),
+    'Set up company',
+  );
+}
+
+async function setUpCompany(): Promise<void> {
+  try {
+    const r = await call<{ created: string[]; folder: string }>('POST', '/api/crew/company', {});
+    toast(r.created.length ? `The company is ready: the CEO and ${r.created.filter((id) => id !== 'ceo').length} departments. Write to the CEO.` : 'The company was already set up.');
+  } catch (err) {
+    toast(`Could not set up the company: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 function renderSide(): void {
   sideList.replaceChildren();
+  const hasCompany = [...S.agents.values()].some((a) => a.kind === 'ceo');
+  for (const btn of side.querySelectorAll<HTMLElement>('.side__company')) btn.hidden = hasCompany;
+  for (const link of side.querySelectorAll<HTMLElement>('.side__hq')) link.hidden = !hasCompany;
+  let companyLabel = false;
   for (const a of S.agents.values()) {
+    if ((a.kind === 'ceo' || a.kind === 'department') && !companyLabel) {
+      companyLabel = true;
+      sideList.append(h('div', { class: 'side__label side__label--inline' }, 'Company'));
+    }
     const st = S.states.get(a.id);
     const open = [...S.questions.values()].filter((q) => q.agentId === a.id && q.status === 'open').length;
     const busy = st?.status === 'working' && st.activity;

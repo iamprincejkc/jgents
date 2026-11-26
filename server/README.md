@@ -90,6 +90,8 @@ festa) ou 10 min. Push só avisa. O mesmo CI visto de novo em 2 min não repete 
 | `GET /api/messages/:id` | (página) situação da mensagem (`OutboxMessage`: `queued` \| `sent` \| `delivered` \| `failed`) |
 | `POST /api/mod/inbox` | (plugin `jgents-messages`) `{session, account?}`: marca a presença da sessão e entrega `{messages: InboxMessage[]}` |
 | `GET /api/crew` · `GET /api/crew/stream` | Crew (`server/crew/`): `CrewSnapshot` and its SSE (`snapshot`, `message`, `delta`, `state`, `question`, `agents`, `cleared`); the other routes are listed at the top of `server/crew/http.ts`. Local access only, Node mode |
+| `POST/GET /api/crew/company` · `GET /api/crew/company/outbox/:name` | The company (`server/crew/company.ts`): set it up; `CrewCompany` (CEO, departments, states, the log, the outbox, and the members as the office draws them); one finished file. The HQ console (`/hq` → `/hq.html`, `client/src/hq/`) reads these. The office gets the members in `OfficeSnapshot.company` and skips their own sessions |
+| `GET /api/dictation` | `{available, missing?}`: whether the local Whisper transcribes here and, when not, what to install |
 | `POST /api/mod/inbox/ack` | (plugin) `{session, results: [{id, ok, error?}]}`: confirma cada mensagem entregue (ou a falha) |
 
 O snapshot (SSE e `GET /api/snapshot`) leva só as últimas 8 atividades de cada agente em `recent`; o histórico
@@ -376,6 +378,7 @@ do Codex levam `provider: 'codex'` (ausente = Claude Code). Ids: `<conta>:<threa
 | `JGENTS_IN_DOCKER` | auto (`/.dockerenv`) | `1` = não confere PIDs (são do host) |
 | `JGENTS_ACCOUNTS` | — | JSON com metadados das contas vindos do host (Docker): `[{id, configDir, mountDir, short, name, email, organization, plan, color, cachedUsage}]`, casados por `id`, `mountDir` ou `configDir` |
 | `JGENTS_USAGE_DIR` | `~/.jgents/usage` (Docker: `/usage`) | pasta do uso capturado pelo tap de statusline ou pelo mod do Claude Code, relida a cada 5 s |
+| `JGENTS_CREATURES_DIR` | `<JGENTS_DATA_DIR>/creatures` | pacote de criaturas do dono: imagens que passeiam pelo jardim (`GET /api/creatures`, `GET /api/creatures/file/<nome>`; `server/creatures/pack.ts`), relida a cada consulta |
 | `JGENTS_ALLOWED_HOSTS` | — | nomes extras aceitos no `Host`/`Origin` (vírgula); `localhost`, `*.localhost` e IPs sempre valem |
 
 No hook de permissão (ambiente do Claude Code; os argumentos `--port`/`--timeout` gravados pelo instalador têm

@@ -23,6 +23,7 @@
 //   escuro (não preto); 3–4 tons por material; brilhos especulares; sombras de contato; muitos detalhes pequenos.
 
 import type { AppearanceParts } from '../../../shared/appearance';
+import type { CreatureMotion, CreatureSpecies, CreatureVariant } from './creatures';
 
 export const TILE = 16;
 
@@ -54,7 +55,9 @@ export type Pose =
   | 'game' // jogando videogame: controle (held 'controller') nas duas mãos à frente do peito, polegares mexendo, corpo inclinado para a tela (2). Em pé ou sentado
   | 'rps' // pedra-papel-tesoura. held 'none': punho fechado subindo (quadro 0) e descendo (1) na contagem "jo-ken-pô"; held 'rock'|'paper'|'scissors': braço estendido à frente mostrando o gesto (2). Em pé (sentado também funciona)
   | 'groom' // diante do espelho (normalmente dir 'up', de costas): uma mão perto do rosto/cabelo indo e voltando — batom, pente, ajeitar o cabelo (2). held opcional 'lipstick'|'comb'. Em pé
-  | 'sulk'; // chateado (perdeu a aposta/partida): ombros caídos, cabeça baixa, olhos semicerrados, braços pendurados (2). Em pé ou sentado
+  | 'sulk' // chateado (perdeu a aposta/partida): ombros caídos, cabeça baixa, olhos semicerrados, braços pendurados (2). Em pé ou sentado
+  // --- entertainment wing (additive)
+  | 'sing'; // karaoke: held 'mic' at the mouth, mouth open, the free arm swaying out (0) and up (1) (2). Standing
 
 export type HeldItem = 'none' | 'coffee' | 'water' | 'papers' | 'laptop' | 'book' | 'box' | 'paddle' | 'popcorn'
   // --- vida social (aditivo)
@@ -64,7 +67,10 @@ export type HeldItem = 'none' | 'coffee' | 'water' | 'papers' | 'laptop' | 'book
   | 'scissors' // pose 'rps': indicador e médio em V (tesoura)
   | 'phone' // celular (com 'read' ou 'sit': olhando a tela, polegar rolando; tela acesa azulada)
   | 'lipstick' // batom (pose 'groom')
-  | 'comb'; // pente (pose 'groom')
+  | 'comb' // pente (pose 'groom')
+  // --- entertainment wing (additive)
+  | 'cue' // billiards cue: with pose 'play' in profile it lies flat for the stroke (frame 0 drawn back, 1 forward); otherwise held upright
+  | 'mic'; // handheld microphone (pose 'sing')
 
 export type HairStyle =
   | 'short' | 'buzz' | 'spiky' | 'side_part' | 'curly' | 'afro' | 'bob' | 'long' | 'ponytail' | 'bun' | 'pigtails'
@@ -109,7 +115,9 @@ export type SpriteRectName = 'screen' | 'board' | 'glass' | 'face' | 'tv' | 'sig
    * escurecido (planilha/editor/painel); o mundo PODE desenhar por cima (ex.: drawScreen 'off'
    * quando a sala apaga, ou outro modo quando o dono trabalha). Ignorar também funciona.
    */
-  | 'screen2';
+  | 'screen2'
+  /** (Additive) pool_table: the playing surface inside the cushions, where the world draws the balls. */
+  | 'felt';
 
 export interface Sprite {
   canvas: HTMLCanvasElement;
@@ -189,7 +197,24 @@ export type FurnitureKind =
   | 'sink' // 1x1 pia com gabinete (encostada na parede norte; use 'mirror' na parede acima).
   // --- recepção
   | 'reception_desk' // 3x1 balcão de recepção.
-  | 'bench'; // 2x1 banco de espera (assento, olhando para baixo).
+  | 'bench' // 2x1 banco de espera (assento, olhando para baixo).
+  // --- entertainment wing (additive)
+  | 'pool_table' // 4x2 billiards table: green felt, wooden rails, six pockets. No balls in the sprite: rects.felt is where the world draws them.
+  | 'cue_rack' // wall, 1 tile: rack of cues with the triangle hanging beside it.
+  | 'dartboard' // wall, 1 tile: dartboard with two darts in it.
+  | 'neon_sign' // wall, 5 tiles: neon tube lettering (no backing board). variants: 'billiards' | 'coffee' | 'karaoke' | 'pickleball'
+  | 'jukebox' // 1x1 glowing retro jukebox.
+  | 'espresso_machine' // 1x1 dark-wood bar counter with a chrome two-group espresso machine. Use: stand to the SOUTH facing up. state 0 = idle, 1 = pulling a shot.
+  | 'pastry_case' // 1x1 bar counter with a glass case of pastries.
+  | 'bar_counter' // 1x1 high bar counter segment (free-standing). variants: 'mid' | 'left' | 'right' (rounded ends).
+  | 'bar_stool' // 1x1 seat: round cushion on a chrome pole. Any direction.
+  | 'menu_board' // wall, 2 tiles: chalkboard menu.
+  | 'bean_sacks' // 1x1 burlap sacks of coffee beans.
+  | 'pickleball_net' // 1x6 net running north-south (centre of the footprint), posts at both ends.
+  | 'scoreboard' // wall, 2 tiles: dark board; rects.screen is where the world draws the score.
+  | 'ball_cart' // 1x1 wire cart full of pickleballs.
+  | 'speaker' // 1x1 PA speaker cabinet.
+  | 'karaoke_screen'; // wall, 3 tiles: big screen; rects.tv = picture (the world draws drawScreen 'karaoke' there).
 
 export interface FurnitureDef {
   mount: 'floor' | 'wall';
@@ -263,7 +288,37 @@ export const FURNITURE: Readonly<Record<FurnitureKind, FurnitureDef>> = {
   sink: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: true },
   reception_desk: { mount: 'floor', footprint: { w: 3, h: 1 }, blocks: true },
   bench: { mount: 'floor', footprint: { w: 2, h: 1 }, blocks: false, seat: true },
+  pool_table: { mount: 'floor', footprint: { w: 4, h: 2 }, blocks: true },
+  cue_rack: { mount: 'wall', footprint: { w: 1, h: 0 }, blocks: false },
+  dartboard: { mount: 'wall', footprint: { w: 1, h: 0 }, blocks: false },
+  neon_sign: { mount: 'wall', footprint: { w: 5, h: 0 }, blocks: false, variants: ['billiards', 'coffee', 'karaoke', 'pickleball'] },
+  jukebox: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: true },
+  espresso_machine: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: true, states: 2 },
+  pastry_case: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: true },
+  bar_counter: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: true, variants: ['mid', 'left', 'right'] },
+  bar_stool: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: false, seat: true },
+  menu_board: { mount: 'wall', footprint: { w: 2, h: 0 }, blocks: false },
+  bean_sacks: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: true },
+  pickleball_net: { mount: 'floor', footprint: { w: 1, h: 6 }, blocks: true },
+  scoreboard: { mount: 'wall', footprint: { w: 2, h: 0 }, blocks: false },
+  ball_cart: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: true },
+  speaker: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: true },
+  karaoke_screen: { mount: 'wall', footprint: { w: 3, h: 0 }, blocks: false },
 };
+
+/** (Additive) Tube colour of each neon_sign variant (the world uses it for the glow after dark). */
+export const NEON_COLORS: Readonly<Record<string, string>> = {
+  billiards: '#5ef0ff',
+  coffee: '#ffb35c',
+  karaoke: '#ff5cd6',
+  pickleball: '#c8ff5c',
+};
+
+/** (Additive) Markings painted over a floor: drawn once into the area's floor layer (ArtModule.drawDecal). */
+export type DecalKind =
+  | 'pickleball_court' // blue court with green surround, white lines and the two "kitchen" (non-volley) zones
+  | 'stage' // raised dark-wood stage with a front lip
+  | 'dance_floor'; // checkerboard of light panels
 
 export type FloorKind =
   | 'carpet' // salas de projeto (usa tint/tint2 do tema da sala)
@@ -309,7 +364,9 @@ export type ScreenMode =
   | 'progress' // terminal escuro com uma barra de progresso/spinner andando (esperando um comando terminar)
   // --- vida social (aditivo; pensados para a TV do lounge e o fliperama, mas valem para qualquer tela)
   | 'show' // programa de TV animado; mapeamento FIXO pelo `seed`: seed % 3 === 0 futebol (campo, jogadores, bola; de tempos em tempos a bola entra no gol e a tela pisca "GOL"), 1 novela (dois rostos em close, corações), 2 desenho animado (cores vivas)
-  | 'game'; // videogame (dois jogadores); mapeamento FIXO pelo `seed`: seed % 2 === 0 corrida em tela dividida (dois carrinhos na pista), 1 luta (dois bonecos e barras de vida)
+  | 'game' // videogame (dois jogadores); mapeamento FIXO pelo `seed`: seed % 2 === 0 corrida em tela dividida (dois carrinhos na pista), 1 luta (dois bonecos e barras de vida)
+  // --- entertainment wing (additive)
+  | 'karaoke'; // karaoke video: shifting colour backdrop, lyric bars with a highlight sweeping along, notes rising
 
 export interface RoomTheme {
   carpet: string;
@@ -372,6 +429,13 @@ export interface ArtModule {
    * usa para a torcida comemorar junto com a TV.
    */
   footballLance?(t: number, seed: number): { lance: number; progress: number; right: boolean; period: number; goalAt: number };
+  /**
+   * (Optional, additive) One frame of a legendary creature (art/creatures.ts). Ground creatures are anchored
+   * at the feet, flyers at the centre of the body. `flip` = facing right.
+   */
+  creatureSprite?(species: CreatureSpecies, variant: CreatureVariant, motion: CreatureMotion, frame: number, flip?: boolean): Sprite;
+  /** (Optional, additive) Floor markings (court lines, stage, dance floor) in a px-of-world rectangle. */
+  drawDecal?(ctx: CanvasRenderingContext2D, kind: DecalKind, x: number, y: number, w: number, h: number, seed: number): void;
   /** Avatar (cabeça + ombros) ampliado para a UI. `parts`: peças do personagem editado (ver AgentInfo.parts). */
   avatarCanvas(seed: number, opts?: { look?: 'f' | 'm'; sub?: boolean; scale?: number; parts?: AppearanceParts }): HTMLCanvasElement;
 }

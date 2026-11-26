@@ -1,6 +1,6 @@
 // Construtor de áreas em coordenadas LOCAIS (tiles relativos ao canto da área).
 // Converte tudo para coordenadas absolutas e registra spots de forma consistente.
-import { FURNITURE, type Dir, type FloorKind, type FurnitureKind, type WallStyle } from '../../art/api';
+import { FURNITURE, type DecalKind, type Dir, type FloorKind, type FurnitureKind, type WallStyle } from '../../art/api';
 import { FOOT_DX, FOOT_DY, TILE } from '../constants';
 import type { AreaKind, AreaLayout, Doorway, FurniturePlacement, SpotDef, SpotKind, TileRect } from './types';
 
@@ -52,6 +52,12 @@ export class AreaBuilder {
 
   floor(kind: FloorKind, lx: number, ly: number, w: number, h: number, seed: number, tint?: string, tint2?: string): this {
     this.area.floors.push({ kind, x: this.px(lx), y: this.py(ly), w: w * TILE, h: h * TILE, seed, tint, tint2 });
+    return this;
+  }
+
+  /** Floor markings over the floor (tiles, local; fractions allowed). */
+  decal(kind: DecalKind, lx: number, ly: number, w: number, h: number, seed: number): this {
+    (this.area.decals ??= []).push({ kind, x: Math.round(this.px(lx)), y: Math.round(this.py(ly)), w: Math.round(w * TILE), h: Math.round(h * TILE), seed });
     return this;
   }
 
@@ -143,7 +149,8 @@ export class AreaBuilder {
    * pelo próprio tile do assento e encaixa na posição do assento (com `dx` opcional em px).
    */
   seat(kind: SpotKind, furnitureKind: FurnitureKind, lx: number, ly: number, dir: Dir, variant?: string, opts: SpotOpts & { order?: number; noFurniture?: boolean } = {}): SpotDef {
-    const furnitureId = opts.noFurniture ? opts.furnitureId : this.furn(furnitureKind, lx, ly, variant, { dx: opts.dx, order: opts.order });
+    // `dy` moves the seat and whoever sits on it together (e.g. half a tile down, to the middle of a 2-tall table)
+    const furnitureId = opts.noFurniture ? opts.furnitureId : this.furn(furnitureKind, lx, ly, variant, { dx: opts.dx, dy: opts.dy, order: opts.order });
     const base = this.py(ly + 1);
     return this.spot(kind, lx, ly, dir, {
       ...opts,
@@ -151,7 +158,7 @@ export class AreaBuilder {
       seated: true,
       x: this.px(lx) + TILE / 2 + (opts.dx ?? 0),
       y: base - SEAT_FOOT_DY + (opts.dy ?? 0),
-      sortY: base + SEATED_SORT_BIAS,
+      sortY: base + SEATED_SORT_BIAS + (opts.dy ?? 0),
     });
   }
 

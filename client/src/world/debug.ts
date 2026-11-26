@@ -10,6 +10,7 @@ import type { Renderer } from './render/renderer';
 import { oldestShell } from './sim/shell';
 import type { Sim } from './sim/sim';
 import type { GatherKind } from './social/gathering';
+import type { CreatureVariant } from '../art/creatures';
 
 /** Um shell para os cenários de depuração: campos de ShellJob opcionais + idade relativa. */
 export interface ShellJobInput extends Partial<ShellJob> {
@@ -87,6 +88,14 @@ export interface WorldDebug {
    * do GitHub; `agentId` = o responsável (estrela na festa, balão "!" no alarme).
    */
   roomEffect(idOrName: string, kind: 'party' | 'alarm' | null, opts?: { text?: string; agentId?: string }): void;
+  /** Legendary creatures on the grounds right now. */
+  legends(): { uid: number; species: string; variant: string; x: number; y: number; flies: boolean; alpha: number }[];
+  /**
+   * Brings a legendary creature out now (a species not already out, or the one given), optionally at a
+   * tile on the grounds (walkers stay put there until they rest and wander). Returns its uid or null.
+   */
+  /** Brings out a creature now: a built-in species or a pack id (`pack:<file>`); null when unknown or every kind is out. */
+  spawnLegend(species?: string, variant?: CreatureVariant, at?: { tx: number; ty: number }): number | null;
   readonly sim: Sim;
   readonly camera: Camera;
 }
@@ -176,7 +185,7 @@ export function createDebug(sim: Sim, renderer: Renderer, camera: Camera, onCame
 
   return {
     state: () => ({
-      cols: sim.building.cols,
+      floors: sim.building.floors,
       camera: { x: Math.round(camera.x), y: Math.round(camera.y), zoom: camera.zoom },
       rooms: [...sim.rooms.values()].map((r) => ({
         id: r.id,
@@ -417,6 +426,18 @@ export function createDebug(sim: Sim, renderer: Renderer, camera: Camera, onCame
       sim.roomFx.active.set(room.id, { roomId: room.id, kind, text, agentId, key: t, start: t, end, cheered: new Set(), sticky: true });
     },
 
+    legends: () => renderer.legends.list.map((l) => ({ uid: l.uid, species: l.species, variant: l.variant, x: l.x, y: l.y, flies: l.flies, alpha: l.alpha })),
+    spawnLegend: (species, variant, at) => {
+      const l = renderer.legends.spawn(now(), species, variant);
+      if (!l) return null;
+      if (at) {
+        l.x = l.tx = at.tx * TILE + TILE / 2;
+        l.y = l.ty = at.ty * TILE + TILE / 2;
+        l.restUntil = now() + 8_000;
+        if (l.flies) l.ty = l.y;
+      }
+      return l.uid;
+    },
     sim,
     camera,
   };

@@ -1,5 +1,6 @@
 // Who gets a request. In order:
 // 1. @mentions ("@studio make a teaser") or the agent picked in the composer: those agents, no guessing;
+// 1b. with a company (an agent of kind 'ceo'), everything else goes to the CEO, which briefs the departments;
 // 2. a quick Claude call (haiku by default, no tools) that reads the roster and the last exchanges and answers JSON,
 //    so "add a pentest for the Jet API" goes to Sentinel and "now also add tests" stays with whoever you were talking to;
 // 3. if that fails or times out: keyword scoring over names, keywords, descriptions and folder names.
@@ -15,7 +16,7 @@ export interface Assignment {
 
 export interface RouteResult {
   assignments: Assignment[];
-  via: 'mention' | 'picked' | 'llm' | 'keywords' | 'default';
+  via: 'mention' | 'picked' | 'llm' | 'keywords' | 'default' | 'ceo';
 }
 
 export interface RecentExchange {
@@ -147,6 +148,8 @@ export async function route(
     return { assignments: m.ids.slice(0, MAX_SPLIT).map((id) => ({ agentId: id, task: m.rest, reason: 'mentioned' })), via: 'mention' };
   }
   if (agents.length === 1) return { assignments: [{ agentId: agents[0].id, task: text, reason: 'only agent' }], via: 'default' };
+  const ceo = agents.find((a) => a.kind === 'ceo');
+  if (ceo) return { assignments: [{ agentId: ceo.id, task: text, reason: 'the CEO takes every request' }], via: 'ceo' };
   if (opts.classify) {
     const raw = await opts.classify(routerPrompt(text, agents, opts.recent ?? [])).catch(() => undefined);
     const a = raw ? parseRouterAnswer(raw, agents, text) : [];

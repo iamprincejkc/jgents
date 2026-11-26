@@ -327,12 +327,25 @@ export interface AccountInfo {
   usageStatus: 'ok' | 'stale' | 'disabled';
 }
 
+/**
+ * (Additive) The room id of the company (the CEO and its departments, server/crew/company.ts): they live in the Main
+ * Office in the middle of the house, not in a project room, so no RoomInfo carries this id.
+ */
+export const COMPANY_ROOM_ID = 'company:hq';
+/** (Additive) The AgentInfo id of the company's CEO (the others are "company:<crew id>"). */
+export const COMPANY_CEO_ID = 'company:ceo';
+
 export interface OfficeSnapshot {
   /** Incrementa a cada mudança. */
   rev: number;
   serverTime: number;
   rooms: RoomInfo[];
   agents: AgentInfo[];
+  /**
+   * (Optional, additive) The company: the CEO and its departments as characters (roomId COMPANY_ROOM_ID), always in
+   * the office, in uniform. Kept apart from `agents` so lists of sessions never see them. Absent = no company.
+   */
+  company?: AgentInfo[];
   /** Terminais interativos abertos pelo JGENTS (Claude Code rodando dentro do navegador). */
   ptys?: PtyInfo[];
   /** Contas do Claude detectadas (com uso de 5h/semanal quando disponível). */

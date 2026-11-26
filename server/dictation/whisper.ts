@@ -6,8 +6,8 @@
 // (scripts/codex-bridge.ts) no Docker. Sem shell (execFile), com prazo, numa pasta temporária apagada no fim.
 // Node puro e sem dependências: também é importado pelo auxiliar do host (via tsx).
 import { execFile } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { availableParallelism, homedir, tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { tr } from '../../shared/i18n';
 
@@ -99,6 +99,36 @@ export function parseWhisperJson(raw: string): Transcript {
   return { text, lang: typeof d.result?.language === 'string' ? d.result.language : '' };
 }
 
+/**
+ * The encoder's window for a clip of `seconds` (whisper-cli -ac): whisper.cpp encodes 30 s windows of 1500 frames (50
+ * per second) even for a short sentence, so a short clip gets a window its size plus a margin, several times faster
+ * with the same text. 0 = the full window (clips near or over 30 s are split into full windows anyway).
+ */
+export function audioContext(seconds: number): number {
+  if (!(seconds > 0) || seconds >= 28) return 0;
+  return Math.min(1500, Math.ceil(seconds * 50) + 128);
+}
+
+/** whisper-cli threads: its default is 4; more cores help up to about 8. */
+export function threadsFor(cores: number): number {
+  return Math.max(1, Math.min(8, Math.floor(cores) || 1));
+}
+
+/** One whisper-cli pass: JSON out (-oj) in `out`.json, in `lang` ('auto' detects it). */
+export function passArgs(setup: Pick<WhisperSetup, 'model'>, wav: string, out: string, lang: string, seconds: number, cores: number): string[] {
+  const ctx = audioContext(seconds);
+  return ['-m', setup.model, '-l', lang, '-f', wav, '-nt', '-np', '-oj', '-of', out, '-t', String(threadsFor(cores)), ...(ctx ? ['-ac', String(ctx)] : [])];
+}
+
+/** Length of a 16 kHz mono 16-bit WAV (what the ffmpeg step writes), from its size. */
+function wavSeconds(file: string): number {
+  try {
+    return Math.max(0, statSync(file).size - 44) / (16_000 * 2);
+  } catch {
+    return 0;
+  }
+}
+
 /** Transcritor com o whisper-cli; a pasta temporária some no fim, com ou sem erro. */
 export function createWhisperTranscriber(setup: WhisperSetup, timeoutMs = TRANSCRIBE_TIMEOUT_MS): Transcriber {
   return async (audio) => {
@@ -109,12 +139,18 @@ export function createWhisperTranscriber(setup: WhisperSetup, timeoutMs = TRANSC
       writeFileSync(input, audio, { mode: 0o600 });
       const conv = await run(setup.ffmpeg, ['-nostdin', '-loglevel', 'error', '-y', '-i', input, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav], timeoutMs);
       if (!conv.ok) throw new Error(tr('não deu para ler o áudio ({0})', [conv.error]));
+      const seconds = wavSeconds(wav);
       const pass = async (lang: string): Promise<Transcript> => {
         const out = join(dir, `out-${lang}`);
-        const r = await run(setup.bin, ['-m', setup.model, '-l', lang, '-f', wav, '-nt', '-np', '-oj', '-of', out], timeoutMs);
+        const r = await run(setup.bin, passArgs(setup, wav, out, lang, seconds, availableParallelism()), timeoutMs);
         if (!r.ok) throw new Error(tr('o Whisper falhou ({0})', [r.error]));
         return parseWhisperJson(readFileSync(`${out}.json`, 'utf8'));
       };
+      // One language configured (JGENTS_DICTATION_LANGS=en): no detection pass, half the time.
+      if (setup.langs.length === 1) {
+        const only = await pass(setup.langs[0]);
+        return { text: only.text, lang: setup.langs[0] };
+      }
       const first = await pass('auto');
       if (!first.lang || setup.langs.includes(first.lang) || !first.text) return first;
       // Detectou uma língua fora da lista (ex.: "es" para português): refaz no idioma principal.

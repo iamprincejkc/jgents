@@ -1,5 +1,5 @@
 // Decisões de comportamento — funções PURAS (testáveis sem DOM).
-import type { ActivityKind, AgentKind, AgentStatus, ShellJob } from '../../../../shared/types';
+import { COMPANY_ROOM_ID, type ActivityKind, type AgentInfo, type AgentKind, type AgentStatus, type ShellJob } from '../../../../shared/types';
 import type { ScreenMode } from '../../art/api';
 import type { WorldOptions } from '../api';
 import type { SpotDef } from '../layout/types';
@@ -65,7 +65,7 @@ export function screenModeFor(kind: ActivityKind | undefined): ScreenMode {
   }
 }
 
-export type IdleActivity = 'coffee' | 'water' | 'bathroom' | 'lounge' | 'pingpong' | 'talk' | 'window' | 'shelf' | 'stretch' | 'arcade' | 'snack' | 'mirror' | 'phone';
+export type IdleActivity = 'coffee' | 'water' | 'bathroom' | 'lounge' | 'pingpong' | 'talk' | 'window' | 'shelf' | 'stretch' | 'arcade' | 'snack' | 'mirror' | 'phone' | 'darts';
 
 export const IDLE_WEIGHTS: Readonly<Record<IdleActivity, number>> = {
   coffee: 18,
@@ -81,6 +81,7 @@ export const IDLE_WEIGHTS: Readonly<Record<IdleActivity, number>> = {
   snack: 5,
   mirror: 3,
   phone: 6,
+  darts: 4,
 };
 
 /** Sorteio ponderado entre as atividades disponíveis (`avail[k] === false` exclui). */
@@ -118,6 +119,14 @@ export const LONG_IDLE_MS = 10 * 60_000;
 
 export function isLongIdle(status: AgentStatus, statusSince: number, now: number): boolean {
   return status === 'idle' && now - statusSince > LONG_IDLE_MS;
+}
+
+/**
+ * isLongIdle for a character's agent. The company (roomId COMPANY_ROOM_ID) never naps for good: idle is its normal
+ * state between briefs, so it keeps wandering and playing instead.
+ */
+export function agentLongIdle(a: Pick<AgentInfo, 'status' | 'statusSince' | 'roomId'>, now: number): boolean {
+  return a.roomId !== COMPANY_ROOM_ID && isLongIdle(a.status, a.statusSince, now);
 }
 
 /**

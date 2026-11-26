@@ -145,8 +145,8 @@ type DemoAccount = Omit<AccountInfo, 'sessions' | 'usage' | 'usageStatus'>;
 // No ?mock=1 as contas imitam o cenário real (C e D no Claude Code, mais uma do Codex). Misturado aos dados reais
 // no servidor (idPrefix), o demo usa contas próprias, inconfundíveis com as de verdade.
 const DEMO_ACCOUNTS: DemoAccount[] = [
-  { id: '.claude', short: 'C', name: 'Account C', email: 'dev@company.example', organization: tr('Empresa'), plan: 'Max', color: '#f08a3c', configDir: '~/.claude' },
-  { id: '.claude-conta2', short: 'D', name: 'Account D', email: 'dev@personal.example', plan: 'Max', color: '#4aa8e8', configDir: '~/.claude-conta2' },
+  { id: '.claude', short: 'C', name: 'Claude C', email: 'dev@company.example', organization: tr('Empresa'), plan: 'Max', color: '#f08a3c', configDir: '~/.claude' },
+  { id: '.claude-conta2', short: 'D', name: 'Claude D', email: 'dev@personal.example', plan: 'Max', color: '#4aa8e8', configDir: '~/.claude-conta2' },
 ];
 /** Conta do Codex (um CODEX_HOME): sem e-mail (o JGENTS não lê credenciais), com o plano dos `rate_limits`. */
 const DEMO_CODEX_ACCOUNT: DemoAccount = { id: '.codex', provider: 'codex', short: 'X', name: 'Codex', plan: 'Team', color: '#a77bf3', configDir: '~/.codex' };

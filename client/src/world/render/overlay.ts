@@ -7,7 +7,7 @@
 import { TILE } from '../../art/api';
 import type { WorldOptions } from '../api';
 import type { Camera } from '../camera';
-import { COL_W, CORRIDOR_Y, SOUTH_Y } from '../constants';
+import { COL_W } from '../constants';
 import type { Character } from '../sim/character';
 import { shellAgeKey, shellBubbleAlpha, shellBubbleText, STORM_LIFT, unitHash } from '../sim/shell';
 import type { Sim } from '../sim/sim';
@@ -18,7 +18,7 @@ import { tr } from '../../../../shared/i18n';
 
 // A Pixelify Sans tem o "C" maiúsculo quase fechado (lê-se "Oopa" em vez de "Copa") em qualquer
 // peso/tamanho usado no canvas; os textos do mundo usam a fonte do sistema, sempre legível.
-const UI_FONT = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
+const UI_FONT = '"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
 const LABEL_FONT = `600 10.5px ${UI_FONT}`;
 const BUBBLE_FONT = `500 11.5px ${UI_FONT}`;
 const SAY_FONT = `500 10.5px ${UI_FONT}`;
@@ -47,11 +47,20 @@ const OVERVIEW_PER_ROOM = 1;
 const OVERVIEW_TOTAL = 4;
 
 const CORE_NAMES: Record<string, string> = {
+  'core:escritorio': tr('Escritório central'),
   'core:recepcao': tr('Recepção'),
   'core:banheiros': tr('Banheiros'),
   'core:copa': tr('Copa'),
   'core:lounge': tr('Lounge'),
+  'core:cafeteria': tr('Cafeteria'),
+  'core:sinuca': tr('Salão de sinuca'),
+  'core:quadra': tr('Quadra de pickleball'),
+  'core:karaoke': tr('Karaokê'),
 };
+
+/** "A wild Voltfang appeared!" stays over a creature this long after it turns up (ms). */
+const LEGEND_ANNOUNCE_MS = 4_500;
+const LEGEND_STAR: Readonly<Record<string, string>> = { normal: '', shiny: ' ✨', shadow: ' 🌑', metallic: ' ⚙️' };
 
 /** 'shell' = espera de shell: balão escuro de terminal com texto verde. 'say' = fala das rodas (papo, torcida, apostas). */
 type Tone = 'info' | 'alert' | 'deliver' | 'shell' | 'say';
@@ -363,7 +372,43 @@ export class Overlay {
     }
     this.drawChats(now);
     this.drawFloaters(now);
+    this.drawLegendTags(now);
     ctx.textBaseline = 'alphabetic';
+  }
+
+  /** Name tag of the creature under the mouse, and the announcement when one turns up. */
+  private drawLegendTags(now: number): void {
+    const { ctx } = this;
+    const hover = this.renderer.legendHover;
+    for (const l of this.renderer.legends.list) {
+      const fresh = now - l.bornAt < LEGEND_ANNOUNCE_MS && !l.leaving;
+      if (l.uid !== hover && !fresh) continue;
+      if (l.alpha < 0.2 && !fresh) continue;
+      const info = this.renderer.legends.def(l);
+      const text = l.uid === hover ? `${info.name} · ${tr('Nv. {0}', [l.level])}${LEGEND_STAR[l.variant] ?? ''}` : tr('Um {0} selvagem apareceu!', [info.name]);
+      const x = this.sx(l.x);
+      const y = this.sy(l.y - l.alt - info.box.cy - info.box.h / 2 - (l.flies ? 2 : 4));
+      if (x < -120 || x > this.camera.viewW + 120 || y < -30 || y > this.camera.viewH + 30) continue;
+      ctx.font = LABEL_FONT;
+      const tw = this.measure(LABEL_FONT, text);
+      const w = Math.round(tw + 16);
+      const h = 18;
+      const bx = Math.round(x - w / 2);
+      const by = Math.round(y - h);
+      ctx.globalAlpha = l.uid === hover ? 1 : Math.min(1, (LEGEND_ANNOUNCE_MS - (now - l.bornAt)) / 600, l.alpha + 0.3);
+      ctx.fillStyle = 'rgba(22,20,40,0.86)';
+      ctx.beginPath();
+      ctx.roundRect(bx, by, w, h, 9);
+      ctx.fill();
+      ctx.strokeStyle = info.glow;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = '#f4f1ff';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, x, by + h / 2 + 1);
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = 1;
+    }
   }
 
   /** Quem senta virado para a câmera atrás de uma mesa: a etiqueta nos pés cobriria a tela do colega. */
@@ -397,8 +442,7 @@ export class Overlay {
     for (const it of items) {
       if (it.type !== 'bubble' || (it.tone !== 'info' && it.tone !== 'shell' && it.tone !== 'say') || it.prio >= 75) continue;
       // por área FÍSICA (onde o personagem está agora), que é o que polui a tela
-      const ch = it.ch;
-      rin.push({ room: `${Math.floor(ch.tx / COL_W)}:${ch.ty < CORRIDOR_Y ? 'n' : ch.ty < SOUTH_Y ? 'c' : 's'}`, prio: it.prio, changedAt: it.changedAt });
+      rin.push({ room: this.areaAt(it.ch.tx, it.ch.ty), prio: it.prio, changedAt: it.changedAt });
       idx.push(it);
     }
     if (!idx.length) return;
@@ -440,10 +484,20 @@ export class Overlay {
         // endereço antigo de uma mudança: o nome já está na sala nova
         if (!room.present || room.ghost || (anim && anim.walls < 0.6)) continue;
         this.drawRoomPill(room.info.name, cx, cy, colW - 8, room.accounts, this.countIn(room.id), room.theme.accent, room.lightOn);
-      } else if (CORE_NAMES[vis.id]) {
-        this.drawCorePill(CORE_NAMES[vis.id], cx, cy, colW - 8);
+      } else {
+        const name = CORE_NAMES[vis.id] ?? vis.layout.label;
+        if (name) this.drawCorePill(name, cx, cy, colW - 8);
       }
     }
+  }
+
+  /** Id of the area a tile is in ('' outside every area). */
+  private areaAt(tx: number, ty: number): string {
+    for (const vis of this.renderer.areas.values()) {
+      const r = vis.layout.rect;
+      if (tx >= r.x && ty >= r.y && tx < r.x + r.w && ty < r.y + r.h) return vis.id;
+    }
+    return '';
   }
 
   /** Altura dos ícones sobre a cabeça, contando o balão "!" de quem viu o CI falhar (render/github-fx.ts). */

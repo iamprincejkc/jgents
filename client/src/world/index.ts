@@ -3,17 +3,21 @@
 import * as artModule from '../art';
 import { TILE, type ArtModule } from '../art/api';
 import type { OfficeStore } from '../net/store';
-import { DEFAULT_WORLD_OPTIONS, seasonalThemeFor, type Selection, type SocialEvent, type SoundCue, type WorldApi, type WorldOptions, type WorldPlayback } from './api';
+import { DEFAULT_WORLD_OPTIONS, seasonalThemeFor, type LegendEncounter, type Selection, type SocialEvent, type SoundCue, type WorldApi, type WorldOptions, type WorldPlayback } from './api';
+import type { CreatureVariant } from '../art/creatures';
+import { CreatureCatalog, type CreatureDef } from './creature-catalog';
+import { watchCreaturePack } from './creature-pack';
+import { VARIANT_LABEL, type Legend } from './legends';
 import { loadWorldAssets, type WorldAssets } from './assets';
 import { Camera, overviewFrame } from './camera';
 import { createDebug, type WorldDebug } from './debug';
-import { BUILDING_H, COL_W } from './constants';
+import { HOUSE_W, houseH } from './constants';
 import { inRect } from './layout/geometry';
 import { attachInput, type Hit } from './input';
 import { rebaseSnapshot } from './playback';
 import { Overlay } from './render/overlay';
 import { Renderer } from './render/renderer';
-import { Sim } from './sim/sim';
+import { isCompany, Sim } from './sim/sim';
 import { SoundCues } from './sound-cues';
 
 export * from './api';
@@ -24,9 +28,13 @@ const art: ArtModule = artModule;
 export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): WorldApi & { debug: WorldDebug } {
   let options: WorldOptions = { ...DEFAULT_WORLD_OPTIONS };
   const camera = new Camera();
+  // The creatures that roam: built-in, the owner's pack (kept in sync with its folder) or both.
+  const creatures = new CreatureCatalog();
+  creatures.setChoice(options.creatures ?? 'pack');
+  const stopPack = watchCreaturePack((defs) => creatures.setPack(defs));
   // Simulação e desenho são recriados quando o timelapse entra, pula ou sai (rebuild).
   let sim = new Sim(art, () => options);
-  let renderer = new Renderer(canvas, art, sim, camera);
+  let renderer = new Renderer(canvas, art, sim, camera, creatures);
   let overlay = new Overlay(renderer.ctx, sim, renderer, camera);
   let assets: WorldAssets | null = null;
   /** Timelapse ligado: relógio próprio do mundo (`worldNow`), acelerado pelo fator de animação. */
@@ -36,6 +44,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
   const hoverCbs = new Set<(id: string | null) => void>();
   const socialCbs = new Set<(e: SocialEvent) => void>();
   const soundCbs = new Set<(c: SoundCue) => void>();
+  const legendCbs = new Set<(e: LegendEncounter) => void>();
   const roomMenuCbs = new Set<(roomId: string, at: { x: number; y: number }) => void>();
   let cues = new SoundCues(sim, camera);
   let selection: Selection = null;
@@ -46,7 +55,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
   let hiddenAt = 0;
   let userMoved = false;
   let framed = false;
-  let lastCols = -1;
+  let lastFloors = -1;
   const abort = new AbortController();
 
   // ------------------------------------------------------------------ tamanho/DPR
@@ -65,7 +74,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
     updateBounds();
   };
 
-  const buildingRect = () => ({ x: 0, y: 0, w: sim.building.cols * COL_W * TILE, h: BUILDING_H * TILE });
+  const buildingRect = () => ({ x: 0, y: 0, w: HOUSE_W * TILE, h: houseH(sim.building.floors) * TILE });
 
   const updateBounds = () => {
     const b = buildingRect();
@@ -154,6 +163,9 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
     const slack = Math.max(1, 3 / camera.zoom);
     for (const [id, h] of renderer.heads) {
       if (!h.visible) continue;
+      // the company has no session to show in the drawer (it is reached through the crew)
+      const who = sim.chars.get(id);
+      if (who && isCompany(who.info)) continue;
       if (w.x < h.bx - slack || w.x > h.bx + h.bw + slack || w.y < h.by - slack || w.y > h.by + h.bh + slack) continue;
       if (h.depth > bestDepth) {
         bestDepth = h.depth;
@@ -161,10 +173,42 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
       }
     }
     if (best) return { type: 'agent', id: best };
+    const legend = options.legends === false ? null : renderer.legends.hit(w.x, w.y);
+    if (legend) return { type: 'legend', uid: legend.uid };
     const tx = Math.floor(w.x / TILE);
     const ty = Math.floor(w.y / TILE);
     for (const room of sim.rooms.values()) if (room.present && !room.ghost && inRect(room.layout.rect, tx, ty)) return { type: 'room', id: room.id };
     return null;
+  };
+
+  /** A creature's picture for the encounter card (42:34, like the built-in sprites). */
+  const cardSprite = (d: CreatureDef, variant: CreatureVariant): HTMLCanvasElement | null => {
+    if (d.sprites) return d.sprites.cards[variant];
+    return d.builtin && art.creatureSprite ? art.creatureSprite(d.builtin, variant, 'idle', 0, false).canvas : null;
+  };
+
+  /** What the encounter card shows for a creature on the grounds. */
+  const encounterOf = (l: Legend): LegendEncounter | null => {
+    const def = renderer.legends.def(l);
+    const sprite = cardSprite(def, l.variant);
+    if (!sprite) return null;
+    const roster: LegendEncounter['roster'] = [];
+    for (const d of creatures.active()) {
+      const s = cardSprite(d, 'normal');
+      if (s) roster.push({ species: d.id, name: d.name, sprite: s });
+    }
+    return {
+      species: def.id,
+      name: def.name,
+      types: [...def.types],
+      level: l.level,
+      variant: l.variant,
+      variantLabel: VARIANT_LABEL[l.variant],
+      blurb: def.blurb,
+      glow: def.glow,
+      sprite,
+      roster,
+    };
   };
 
   const setHover = (id: string | null) => {
@@ -176,8 +220,17 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
 
   const detachInput = attachInput(canvas, camera, {
     pick,
-    click: (hit) => setSelection(hit),
+    click: (hit) => {
+      if (hit?.type === 'legend') {
+        const l = renderer.legends.get(hit.uid);
+        const e = l ? encounterOf(l) : null;
+        if (e) legendCbs.forEach((cb) => cb(e));
+        return;
+      }
+      setSelection(hit);
+    },
     doubleClick: (hit) => {
+      if (hit?.type === 'legend') return;
       if (hit?.type === 'agent') {
         setSelection(hit);
         focusAgent(hit.id, { follow: true });
@@ -244,8 +297,8 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
         events.length = 0;
       }
       renderer.sync(seasonalThemeFor(options.theme, new Date()));
-      if (sim.building.cols !== lastCols) {
-        lastCols = sim.building.cols;
+      if (sim.building.floors !== lastFloors) {
+        lastFloors = sim.building.floors;
         updateBounds();
         if (!framed && sim.initialized) {
           overview(false);
@@ -263,7 +316,12 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
       if (mouse) {
         const hit = pick(mouse.x, mouse.y);
         setHover(hit?.type === 'agent' ? hit.id : null);
-      }
+        const lg = hit?.type === 'legend' ? hit.uid : null;
+        if (lg !== renderer.legendHover) {
+          renderer.legendHover = lg;
+          if (!hover) canvas.style.cursor = lg ? 'pointer' : 'grab';
+        }
+      } else renderer.legendHover = null;
       // seleção de quem já foi embora
       if (selection?.type === 'agent' && !sim.chars.has(selection.id)) setSelection(null);
       if (selection?.type === 'room' && !sim.rooms.has(selection.id)) setSelection(null);
@@ -321,7 +379,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
     // As carteiras ao vivo gravam a cada 5 s: não perde o que mudou desde a última vez (no replay, não grava nada).
     sim.social.wallets.save(Date.now());
     sim = new Sim(art, () => options, playback ? null : undefined);
-    renderer = new Renderer(canvas, art, sim, camera);
+    renderer = new Renderer(canvas, art, sim, camera, creatures);
     if (assets) renderer.setAssets(assets);
     if (playback) {
       const p = playback;
@@ -330,7 +388,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
     overlay = new Overlay(renderer.ctx, sim, renderer, camera);
     debug = createDebug(sim, renderer, camera, markMoved);
     cues = new SoundCues(sim, camera);
-    lastCols = -1;
+    lastFloors = -1;
     setHover(null);
   };
 
@@ -363,6 +421,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
     getOptions: () => ({ ...options }),
     setOptions: (o) => {
       options = { ...options, ...o };
+      if (o.creatures) creatures.setChoice(o.creatures);
       if (o.followSelected !== undefined) camera.follow = o.followSelected && selection?.type === 'agent' ? selection.id : null;
     },
     setViewInsets: (ins) => {
@@ -397,9 +456,14 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
       soundCbs.add(cb);
       return () => void soundCbs.delete(cb);
     },
+    onLegend: (cb) => {
+      legendCbs.add(cb);
+      return () => void legendCbs.delete(cb);
+    },
     destroy: () => {
       cancelAnimationFrame(raf);
       abort.abort();
+      stopPack();
       offSnapshot();
       detachInput();
       window.removeEventListener('resize', resize);
@@ -409,6 +473,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
       hoverCbs.clear();
       socialCbs.clear();
       soundCbs.clear();
+      legendCbs.clear();
     },
     get debug() {
       return debug;

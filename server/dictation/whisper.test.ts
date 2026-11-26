@@ -1,6 +1,6 @@
 import { delimiter, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { findWhisper, parseWhisperJson } from './whisper';
+import { audioContext, findWhisper, parseWhisperJson, passArgs, threadsFor } from './whisper';
 
 describe('Whisper local', () => {
   it('lê texto e idioma do JSON do whisper-cli, sem marcas de silêncio', () => {
@@ -49,6 +49,19 @@ describe('Whisper local', () => {
     const env = { HOME: '/h', PATH: dir };
     expect(findWhisper(env, (p) => have.has(p), 'win32')).toMatchObject({ bin: join(dir, 'whisper-cli.exe'), ffmpeg: join(dir, 'ffmpeg.exe') });
     expect(findWhisper(env, (p) => have.has(p), 'linux')).toMatchObject({ bin: join(dir, 'whisper-cli'), ffmpeg: join(dir, 'ffmpeg') });
+  });
+
+  it('a short clip gets an encoder window its size (several times faster), long ones the full window, and up to 8 threads', () => {
+    expect(audioContext(4.2)).toBe(338);
+    expect(audioContext(0.5)).toBe(153);
+    expect(audioContext(27.9)).toBe(1500);
+    expect(audioContext(28)).toBe(0);
+    expect(audioContext(180)).toBe(0);
+    expect(audioContext(0)).toBe(0);
+    expect(audioContext(Number.NaN)).toBe(0);
+    expect([threadsFor(12), threadsFor(4), threadsFor(1), threadsFor(0)]).toEqual([8, 4, 1, 1]);
+    expect(passArgs({ model: 'm.bin' }, 'a.wav', 'out', 'en', 4.2, 12)).toEqual(['-m', 'm.bin', '-l', 'en', '-f', 'a.wav', '-nt', '-np', '-oj', '-of', 'out', '-t', '8', '-ac', '338']);
+    expect(passArgs({ model: 'm.bin' }, 'a.wav', 'out', 'auto', 95, 2)).toEqual(['-m', 'm.bin', '-l', 'auto', '-f', 'a.wav', '-nt', '-np', '-oj', '-of', 'out', '-t', '2']);
   });
 
   it('acha whisper-cli e ffmpeg no PATH (no Windows, os .exe; os scripts .cmd não rodam sem shell)', () => {

@@ -1,6 +1,6 @@
 // Núcleo do prédio (colunas 0 e 1): recepção com elevadores, banheiros, copa e lounge.
 import type { WallStyle } from '../../art/api';
-import { COL_W, NORTH_Y, ROOM_H, SOUTH_Y, TILE } from '../constants';
+import { COL_W, LOWER_Y, NORTH_Y, ROOM_H, SOUTH_Y, TILE } from '../constants';
 import { AreaBuilder, SEATED_SORT_BIAS } from './builder';
 import type { AreaLayout } from './types';
 
@@ -187,20 +187,21 @@ export function layoutCafe(): AreaLayout {
 }
 
 export function layoutLounge(): AreaLayout {
-  const b = new AreaBuilder(LOUNGE_ID, 'lounge', { x: COL_W, y: SOUTH_Y, w: COL_W, h: ROOM_H });
+  // west of the central office, under the restrooms: the door opens onto the south hall
+  const b = new AreaBuilder(LOUNGE_ID, 'lounge', { x: 0, y: LOWER_Y, w: COL_W, h: ROOM_H });
   const wall = CORE_WALLS.lounge;
   b.floor('wood', 0, 0, 16, 12, 401);
   b.rug(1.5, 3.2, 7, 5.2, '#4f8a5b', 402);
   b.rug(9.2, 4.6, 5.6, 4.4, '#d7c8a8', 403);
-  // parede com TV a oeste; vidro a leste; passagem larga no meio
-  b.face(0.5, 6.5, wall);
+  // parede com TV a oeste, vidro a leste; a passagem larga fica na parede sul
+  b.face(0.5, 9.5, wall);
   b.face(10, 5.5, CORE_WALLS.glass);
-  b.south(0.5, 15, 11, { ...wall, exterior: true });
+  b.south(0.5, 15, 11, wall, [{ lx: 7, w: 3 }]);
   b.cap(0, 0, 0.5, 12, wall);
   b.cap(15.5, 0, 0.5, 12, wall);
   b.walk(1, 2, 14, 9);
-  b.walk(7, 0, 3, 2);
-  b.area.door = { x: COL_W + 7, y: SOUTH_Y, w: 3, h: 2 };
+  b.walk(7, 11, 3, 1);
+  b.area.door = { x: 7, y: LOWER_Y + 11, w: 3, h: 1 };
 
   b.wall('tv', 4.5, undefined, { order: 0.4 });
   b.wall('painting', 1.75, undefined, { order: 0.5 });

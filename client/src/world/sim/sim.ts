@@ -1,15 +1,17 @@
 // Simulação do escritório: concilia snapshots do servidor com os personagens e salas do mundo,
 // planeja comportamentos e executa as filas de passos a cada frame.
 import { partsKey } from '../../../../shared/appearance';
-import type { AgentInfo, OfficeSnapshot, Provider, RoomInfo } from '../../../../shared/types';
+import { hash32 } from '../../../../shared/hash';
+import { COMPANY_CEO_ID, COMPANY_ROOM_ID, type AgentInfo, type OfficeSnapshot, type Provider, type RoomInfo } from '../../../../shared/types';
 import type { ArtModule, Dir, RoomTheme } from '../../art/api';
 import type { WorldOptions } from '../api';
-import { COL_W, COMPACT_DELAY_MS, DISMANTLE_DELAY_MS, FOOT_DX, FOOT_DY, MISSING_DEBOUNCE_MS, RUN_SPEED, TILE, WALK_SPEED } from '../constants';
+import { COMPACT_DELAY_MS, DISMANTLE_DELAY_MS, FOOT_DX, houseH, FOOT_DY, MISSING_DEBOUNCE_MS, RUN_SPEED, TILE, WALK_SPEED } from '../constants';
 import { assembleBuilding, type BuildingLayout } from '../layout/building';
 import { RECEPTION_ID } from '../layout/core';
-import { columnsFor, inRect } from '../layout/geometry';
+import { floorsFor, inRect } from '../layout/geometry';
+import { HUB_CEO_GROUP, HUB_ID } from '../layout/hub';
 import { layoutProjectRoom } from '../layout/room';
-import type { SpotDef, SpotKind } from '../layout/types';
+import type { SpotDef, SpotKind, TileRect } from '../layout/types';
 import { PathFinder } from '../path/astar';
 import { BLOCKED, FREE, SEAT } from '../path/grid';
 import { PROGRAM_SEED } from '../social/gathering';
@@ -21,7 +23,7 @@ import {
   chooseSeat,
   idleSitMs,
   isLastInRoom,
-  isLongIdle,
+  agentLongIdle,
   modeFor,
   pickIdleActivity,
   shouldRun,
@@ -83,6 +85,17 @@ function between(rng: () => number, a: number, b: number): number {
 /** O que define a aparência de um personagem (muda quando o personagem é editado). */
 const lookSig = (a: AgentInfo): string => `${a.seed}|${a.look}|${partsKey(a.parts)}`;
 
+/**
+ * A company member (OfficeSnapshot.company): no project room. It lives in the Main Office: a hot desk there while it
+ * has a brief, its usual lounge seat while idle (and the outings and games of anyone idle); the CEO keeps the chair at
+ * the head of the meeting table.
+ */
+export const isCompany = (a: AgentInfo): boolean => a.roomId === COMPANY_ROOM_ID;
+/** Where an idle company member sits between outings (never a corridor bench or a bathroom). */
+const COMPANY_REST_SEATS: ReadonlySet<SpotKind> = new Set(['sofa', 'armchair', 'beanbag', 'cafe_seat']);
+/** Tiles (local to the Main Office) where a company member with no free seat stands: around the desk island. */
+const COMPANY_STAND_BOX = { x0: 1, y0: 2, x1: 11, y1: 9 } as const;
+
 export class Sim {
   readonly chars = new Map<string, Character>();
   readonly rooms = new Map<string, RoomState>();
@@ -127,7 +140,7 @@ export class Sim {
     storage: StorageLike | null = browserStorage(),
   ) {
     this.social = new Social(this, storage);
-    this.building = assembleBuilding(columnsFor([]), [], 0);
+    this.building = assembleBuilding(floorsFor([]), [], 0);
     this.finder = new PathFinder(this.building.grid);
     this.spots.setSpots(this.building.spots);
     for (const s of this.spots.ofKind('elevator')) this.elevators.push(new Elevator(this.elevators.length, s.id));
@@ -139,7 +152,8 @@ export class Sim {
     let snap = this.injected.rooms.length || this.injected.agents.length ? { ...input, rooms: [...input.rooms, ...this.injected.rooms], agents: [...input.agents, ...this.injected.agents] } : input;
     if (this.agentPatches.size) {
       const patches = this.agentPatches;
-      snap = { ...snap, agents: snap.agents.map((a) => (patches.has(a.id) ? { ...a, ...patches.get(a.id) } : a)) };
+      const patch = (a: AgentInfo): AgentInfo => (patches.has(a.id) ? { ...a, ...patches.get(a.id) } : a);
+      snap = { ...snap, agents: snap.agents.map(patch), ...(snap.company ? { company: snap.company.map(patch) } : {}) };
     }
     this.lastSnapshot = input;
     this.now = now;
@@ -177,10 +191,10 @@ export class Sim {
     if (layoutDirty) this.relayout();
     this.roomFx.sync(snap.rooms, input.serverTime, now);
 
-    // ---- agentes
+    // ---- agentes (and the company, drawn like any agent but living in the Main Office)
     const seen = new Set<string>();
     const fresh: Character[] = [];
-    for (const a of snap.agents) {
+    for (const a of snap.company?.length ? [...snap.agents, ...snap.company] : snap.agents) {
       seen.add(a.id);
       const ch = this.chars.get(a.id);
       if (ch) {
@@ -433,7 +447,7 @@ export class Sim {
       !!home &&
       roomsSeated.has(ch.roomId) &&
       now - ch.info.statusSince >= INITIAL_LOUNGE_MIN_IDLE_MS &&
-      !isLongIdle(ch.info.status, ch.info.statusSince, now) &&
+      !agentLongIdle(ch.info, now) &&
       ch.rng() < INITIAL_LOUNGE_SHARE;
     if (relaxing) {
       const seat = this.randomFree(INITIAL_LOUNGE_SEATS, ch);
@@ -451,10 +465,10 @@ export class Sim {
     } else this.placeOverflow(ch);
   }
 
-  /** Sem lugar reservado: em pé dentro da própria sala (se ela existe) ou na recepção. */
+  /** Sem lugar reservado: em pé dentro da própria sala (se ela existe), no Main Office (a empresa) ou na recepção. */
   private placeOverflow(ch: Character): void {
     const room = this.rooms.get(ch.roomId);
-    const t = room && room.present ? this.overflowTile(ch, room) : null;
+    const t = isCompany(ch.info) ? this.companyStandTile(ch) : room && room.present ? this.overflowTile(ch, room) : null;
     ch.standTile = t;
     const p = t ?? this.lobbyTile(ch);
     ch.placeAtTile(p.x, p.y);
@@ -473,12 +487,142 @@ export class Sim {
 
   /** Reserva mesa (ou banqueta/ponto em pé) na sala do personagem. */
   private assignHome(ch: Character): void {
+    if (isCompany(ch.info)) return this.assignCompanyHome(ch);
     if (ch.homeSpot && this.spots.get(ch.homeSpot) && this.spots.ownerOf(ch.homeSpot) === ch.id) return;
     ch.homeSpot = null;
     const room = this.rooms.get(ch.roomId);
     if (!room || !room.present) return;
     const seat = chooseSeat(room.layout.spots, (id) => this.spots.isFree(id, ch.id), ch.info.kind);
     if (seat && this.spots.reserve(seat.id, ch.id)) ch.homeSpot = seat.id;
+  }
+
+  // =================================================================== the company
+
+  /** Does `ch` sit somewhere to work now (a brief, a question for you, a shell)? Otherwise it rests. */
+  private companyAtWork(ch: Character): boolean {
+    return ch.mode === 'work' || ch.mode === 'wait' || ch.mode === 'shell';
+  }
+
+  /**
+   * Is `s` the right kind of home for `ch` now? The CEO: its chair, always. Working: a hot desk, or a stool only while
+   * every desk is taken (a desk that frees up wins). Idle: any rest seat outside the project rooms.
+   */
+  private companyHomeFits(ch: Character, s: SpotDef): boolean {
+    if (ch.info.id === COMPANY_CEO_ID && this.ceoChair()) return s.group === HUB_CEO_GROUP;
+    if (s.group === HUB_CEO_GROUP) return false;
+    if (this.companyAtWork(ch)) {
+      if (s.areaId !== HUB_ID) return false;
+      if (s.kind === 'desk') return true;
+      return s.kind === 'cafe_seat' && !this.freeHubDesk(ch);
+    }
+    return COMPANY_REST_SEATS.has(s.kind) && !this.rooms.has(s.areaId);
+  }
+
+  /** A free hot desk in the Main Office (by preference), or null. */
+  private freeHubDesk(ch: Character): SpotDef | null {
+    let best: SpotDef | null = null;
+    for (const s of this.spots.ofKind('desk')) {
+      if (s.areaId !== HUB_ID || !this.spots.isFree(s.id, ch.id)) continue;
+      if (!best || (s.rank ?? 99) < (best.rank ?? 99)) best = s;
+    }
+    return best;
+  }
+
+  private ceoChair(): SpotDef | undefined {
+    return this.spots.group(HUB_CEO_GROUP)[0];
+  }
+
+  /**
+   * The seat a company member would take now, without reserving it. The CEO: the chair at the head of the meeting
+   * table. Working: a free hot desk in the Main Office, else a stool at the meeting table (the one nearest the CEO).
+   * Idle: its usual seat (a stable pick by its seed), the Main Office's lounge and bistro first, then any lounge seat
+   * outside the project rooms.
+   */
+  private companySeat(ch: Character): SpotDef | null {
+    const free = (s: SpotDef) => this.spots.isFree(s.id, ch.id);
+    if (ch.info.id === COMPANY_CEO_ID) {
+      const chair = this.ceoChair();
+      if (chair) return free(chair) ? chair : null;
+    }
+    const all = [...this.spots.all()];
+    if (this.companyAtWork(ch)) {
+      const desk = this.freeHubDesk(ch);
+      if (desk) return desk;
+      const head = this.ceoChair() ?? { tx: 0, ty: 0 };
+      const stools = all.filter((s) => s.areaId === HUB_ID && s.kind === 'cafe_seat' && free(s));
+      stools.sort((a, b) => Math.abs(a.tx - head.tx) + Math.abs(a.ty - head.ty) - (Math.abs(b.tx - head.tx) + Math.abs(b.ty - head.ty)));
+      return stools[0] ?? null;
+    }
+    // Idle: spread over the house. The lounge area (Main Office, coffee bar, library, garden, the wing...) where the
+    // fewest company members rest wins; ties and the seat in it go by this member's seed, so each has its usual spot.
+    const seed = ch.info.seed;
+    const rest = all.filter((s) => s.seated && COMPANY_REST_SEATS.has(s.kind) && s.group !== HUB_CEO_GROUP && !this.rooms.has(s.areaId) && free(s));
+    if (!rest.length) return null;
+    const load = new Map<string, number>();
+    for (const c of this.chars.values()) {
+      if (c.id === ch.id || c.gone || !isCompany(c.info) || this.companyAtWork(c)) continue;
+      const area = this.spots.get(c.homeSpot)?.areaId;
+      if (area) load.set(area, (load.get(area) ?? 0) + 1);
+    }
+    const pref = (key: string) => hash32(`${seed}|${key}`) / 0x1_0000_0000;
+    let best = rest[0];
+    let bestScore = Infinity;
+    for (const s of rest) {
+      const score = (load.get(s.areaId) ?? 0) * 10 + pref(s.areaId) + pref(s.id) * 0.001;
+      if (score < bestScore) {
+        best = s;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+
+  /** The home of a company member: kept while it still fits the mode, else swapped (work seat <-> rest seat). */
+  private assignCompanyHome(ch: Character): void {
+    const cur = this.spots.get(ch.homeSpot);
+    if (cur && this.spots.ownerOf(cur.id) === ch.id && this.companyHomeFits(ch, cur)) return;
+    if (ch.homeSpot) this.spots.release(ch.homeSpot, ch.id);
+    ch.homeSpot = null;
+    const seat = this.companySeat(ch);
+    if (seat && this.spots.reserve(seat.id, ch.id)) ch.homeSpot = seat.id;
+  }
+
+  /** The Main Office's rectangle (absolute tiles). */
+  private hubRect(): TileRect | undefined {
+    return this.building.core.find((a) => a.id === HUB_ID)?.rect;
+  }
+
+  private companyStandTile(ch: Character): { x: number; y: number } | null {
+    const r = this.hubRect();
+    if (!r) return null;
+    const b = COMPANY_STAND_BOX;
+    return this.standTileIn(ch, { x0: r.x + b.x0, y0: r.y + b.y0, x1: r.x + b.x1, y1: r.y + b.y1 });
+  }
+
+  /**
+   * A company member with no seat for now (every desk and stool taken while it works, or every lounge seat while
+   * idle): it stands by the desk island, with the laptop if it works, until a seat frees up.
+   */
+  private planCompanyStand(ch: Character): boolean {
+    const stay = ch.standTile && !ch.atSpot && ch.tx === ch.standTile.x && ch.ty === ch.standTile.y && this.overflowFree(ch.tx, ch.ty, ch);
+    const t = stay ? ch.standTile : this.companyStandTile(ch);
+    const r = this.hubRect();
+    if (!t || !r) return this.planLobby(ch, undefined);
+    ch.standTile = t;
+    ch.arriving = false;
+    const steps: Step[] = [];
+    this.pushLeave(ch, steps);
+    // facing the desk island
+    const dir: Dir = facing(t.x * TILE, t.y * TILE, (r.x + 5.5) * TILE, (r.y + 5) * TILE);
+    if (t.x !== ch.tx || t.y !== ch.ty || ch.atSpot) {
+      const dist = Math.abs(t.x - ch.tx) + Math.abs(t.y - ch.ty);
+      steps.push({ t: 'go', tx: t.x, ty: t.y, dir, run: shouldRun(dist, ch.mode) });
+    }
+    const pose = ch.mode === 'wait' ? 'raise_hand' : ch.mode === 'work' ? 'read' : 'stand';
+    const held = ch.mode === 'work' ? 'laptop' : 'none';
+    steps.push({ t: 'until', cond: () => !!this.companySeat(ch), minMs: 1500, maxMs: 12_000, pose, held, dir });
+    ch.queue.push(...steps);
+    return true;
   }
 
   private pickElevator(ch: Character): Elevator {
@@ -492,18 +636,18 @@ export class Sim {
   /** Recalcula o prédio (largura, grade, spots) a partir das salas presentes. */
   relayout(force = false): void {
     const present = [...this.rooms.values()].filter((r) => r.present);
-    let cols = columnsFor(present.map((r) => r.slot));
-    const cur = this.building.cols;
-    if (cols < cur && !force) {
-      // só encolhe quando ninguém está na faixa que vai sumir
-      const limit = cols * COL_W * TILE;
-      if ([...this.chars.values()].some((c) => !c.gone && c.x >= limit - TILE)) {
-        cols = cur;
+    let floors = floorsFor(present.map((r) => r.slot));
+    const cur = this.building.floors;
+    if (floors < cur && !force) {
+      // só encolhe quando ninguém está no andar que vai sumir
+      const limit = houseH(floors) * TILE;
+      if ([...this.chars.values()].some((c) => !c.gone && c.y >= limit - TILE)) {
+        floors = cur;
         this.shrinkPending = true;
       } else this.shrinkPending = false;
     } else this.shrinkPending = false;
     const building = assembleBuilding(
-      cols,
+      floors,
       present.map((r) => r.layout),
       this.layoutVersion + 1,
     );
@@ -573,7 +717,7 @@ export class Sim {
       if (ch.info.kind === 'sub' && !ch.leaving) this.refreshMode(ch);
       // comando em primeiro plano passou dos 10 s (ou a espera acabou): muda de modo sem snapshot novo
       else if (!ch.leaving && (ch.mode === 'shell' || (ch.info.status === 'working' && ch.info.shells?.length))) this.refreshMode(ch);
-      if (ch.mode === 'idle' && isLongIdle(ch.info.status, ch.info.statusSince, now) && ch.atSpot === ch.homeSpot && ch.pose === 'sleep' && ch.icon !== 'zzz') {
+      if (ch.mode === 'idle' && agentLongIdle(ch.info, now) && ch.atSpot === ch.homeSpot && ch.pose === 'sleep' && ch.icon !== 'zzz') {
         ch.setIcon('zzz', 1e12, now);
       }
     }
@@ -1148,6 +1292,13 @@ export class Sim {
     if (ch.gone) return false;
     if (ch.mode === 'leave') return this.planLeave(ch, now);
     if (ch.mode === 'deliver') return this.planDeliver(ch, now);
+    if (isCompany(ch.info)) {
+      // the company has no room (no lobby, no light to switch on): a seat in the Main Office or standing there
+      this.assignHome(ch);
+      if (!ch.homeSpot) return this.planCompanyStand(ch);
+      ch.standTile = null;
+      return this.thinkAtHome(ch, now);
+    }
     const room = this.rooms.get(ch.roomId);
     if (!room || !room.present) return this.planLobby(ch, room);
     this.assignHome(ch);
@@ -1170,9 +1321,14 @@ export class Sim {
         return true;
       }
     }
+    return this.thinkAtHome(ch, now);
+  }
+
+  /** With a home: go there, then (idle) the next outing or (waiting on a shell) a chat now and then. */
+  private thinkAtHome(ch: Character, now: number): boolean {
     if (ch.atSpot !== ch.homeSpot) return this.planGoHome(ch, now);
     ch.arriving = false;
-    if (ch.mode === 'idle' && !isLongIdle(ch.info.status, ch.info.statusSince, now)) {
+    if (ch.mode === 'idle' && !agentLongIdle(ch.info, now)) {
       if (!ch.nextOutingAt) ch.nextOutingAt = now + idleSitMs(ch.rng, this.options().liveliness);
       if (now >= ch.nextOutingAt) {
         if (this.planOuting(ch, now)) return true;
@@ -1262,14 +1418,18 @@ export class Sim {
 
   /** Melhor tile livre da sala para trabalhar em pé: junto a paredes/móveis, longe da porta. */
   private overflowTile(ch: Character, room: RoomState): { x: number; y: number } | null {
-    const grid = this.building.grid;
     const r = room.layout.rect;
-    const door = room.layout.door;
+    return this.standTileIn(ch, { x0: r.x + 1, y0: r.y + 2, x1: r.x + 14, y1: r.y + 10 }, room.layout.door);
+  }
+
+  /** Best free tile in a box (absolute tiles, inclusive) to stand in: backed by a wall or furniture, away from a door. */
+  private standTileIn(ch: Character, box: { x0: number; y0: number; x1: number; y1: number }, door?: TileRect): { x: number; y: number } | null {
+    const grid = this.building.grid;
     const busy = this.busyTiles(ch.id);
     let best: { x: number; y: number } | null = null;
     let bestScore = -Infinity;
-    for (let y = r.y + 2; y <= r.y + 10; y++) {
-      for (let x = r.x + 1; x <= r.x + 14; x++) {
+    for (let y = box.y0; y <= box.y1; y++) {
+      for (let x = box.x0; x <= box.x1; x++) {
         if (!this.overflowFree(x, y, ch, busy)) continue;
         if (door && Math.abs(x - (door.x + door.w / 2 - 0.5)) <= 1.5 && Math.abs(y - (door.y + door.h / 2 - 0.5)) <= 2) continue;
         // de costas para uma parede/móvel parece natural; espremido entre dois móveis ou colado em
@@ -1465,6 +1625,7 @@ export class Sim {
       window: !!this.spots.findFree('window', { by: ch.id }),
       shelf: !!this.spots.findFree('shelf', { by: ch.id }),
       arcade: !!this.spots.findFree('arcade', { by: ch.id }),
+      darts: !!this.spots.findFree('darts', { by: ch.id }),
       snack: !!this.spots.findFree('snack', { by: ch.id }),
       stretch: true,
       mirror: !!this.social.plan('mirror', 1, ch),
@@ -1580,6 +1741,17 @@ export class Sim {
         release(s);
         break;
       }
+      case 'darts': {
+        // a few rounds at the dartboard in the billiards club (a star now and then: bullseye)
+        const s = this.spots.findFree('darts', { by: ch.id, rng })!;
+        if (!this.reserveTemp(ch, s)) return false;
+        this.pushLeave(ch, steps);
+        goUse(s);
+        const rounds = 2 + Math.floor(rng() * 3);
+        for (let i = 0; i < rounds; i++) steps.push({ t: 'act', pose: 'use', ms: between(rng, 1400, 2200), icon: rng() < 0.25 ? 'star' : undefined }, { t: 'act', pose: 'stand', ms: 700 });
+        release(s);
+        break;
+      }
       case 'snack': {
         // máquina de snacks ou geladeira da copa
         const s = this.spots.findFree(rng() < 0.6 ? 'snack' : 'fridge', { by: ch.id, rng }) ?? this.spots.findFree('snack', { by: ch.id, rng });
@@ -1637,12 +1809,12 @@ export class Sim {
       return;
     }
     ch.dir = spot.dir;
-    // sem mesa (banqueta, poltrona, puff): trabalha no notebook
-    const laptop = spot.kind === 'stool' || spot.kind === 'nook';
+    // sem mesa (banqueta, poltrona, puff; a cadeira do CEO e as banquetas da reunião da empresa): trabalha no notebook
+    const laptop = spot.kind !== 'desk';
     if (atHome && ch.mode === 'work') ch.setPose('type', laptop ? 'laptop' : 'none');
     else if (atHome && ch.mode === 'wait') ch.setPose('raise_hand');
     else if (atHome && ch.mode === 'shell') this.shellPose(ch, spot, now);
-    else if (ch.mode === 'idle' && isLongIdle(ch.info.status, ch.info.statusSince, now)) ch.setPose('sleep');
+    else if (ch.mode === 'idle' && agentLongIdle(ch.info, now)) ch.setPose('sleep');
     else ch.setPose('sit');
   }
 
@@ -1682,7 +1854,21 @@ export class Sim {
 
   // =================================================================== aba oculta
 
-  /** Avança tudo instantaneamente para os destinos (usado ao voltar de uma aba oculta). */
+  /**
+   * Back from the background, does `ch` simply carry on? An idle one out on a walk, a game or a chat does: it was frozen
+   * while the page was hidden and picks up where it was (snapping every idle one back to its seat looked like the
+   * whole office had been reset). Work, a question, a shell, arriving and leaving are fast-forwarded instead.
+   */
+  private carriesOn(ch: Character): boolean {
+    if (ch.gone || ch.leaving || ch.arriving || ch.mode !== 'idle') return false;
+    const steps = ch.step ? [ch.step, ...ch.queue] : ch.queue;
+    return !steps.some((s) => s.t === 'elevIn' || s.t === 'elevOut' || s.t === 'remove' || s.t === 'switch');
+  }
+
+  /**
+   * Back from a hidden tab: puts everyone where their status says they should be by now (at the desk working, gone,
+   * out of the elevator), except the idle ones, who carry on with what they were doing (carriesOn).
+   */
   fastForward(now: number): void {
     this.now = now;
     for (const room of this.rooms.values()) {
@@ -1693,8 +1879,10 @@ export class Sim {
     this.updateRooms(now);
     for (const e of this.elevators) e.reset();
     this.machineUntil.clear();
-    this.social.reset(now);
+    const kept = new Set([...this.chars.values()].filter((c) => this.carriesOn(c)).map((c) => c.id));
+    this.social.reset(now, (id) => kept.has(id));
     for (const ch of [...this.chars.values()]) {
+      if (kept.has(ch.id)) continue;
       for (let guard = 0; guard < 60 && !ch.gone; guard++) {
         if (!ch.step) ch.step = ch.queue.shift() ?? null;
         if (!ch.step) break;
@@ -1734,7 +1922,14 @@ export class Sim {
       if (room.present && this.occupants(room) > 0) room.setLight(true, now - 10_000);
       room.switchClaim = null;
     }
+    // a stall stays taken only while someone who carries on is still inside it
     this.stallBusy.clear();
+    for (const ch of this.chars.values()) {
+      const s = ch.step;
+      if (!kept.has(ch.id) || s?.t !== 'stall' || s.phase !== 1) continue;
+      const spot = this.spots.get(s.spot);
+      if (spot) this.stallBusy.add(spot.furnitureId ?? spot.id);
+    }
   }
 
   private finishStep(ch: Character, s: Step, now: number): void {

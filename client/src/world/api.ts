@@ -19,6 +19,30 @@ export interface WorldOptions {
   daylight?: DaylightMode;
   /** Tema visual: automático (segue o calendário; ver seasonalThemeFor), nenhum, Natal ou Halloween. */
   theme?: OfficeTheme;
+  /** (Optional, additive) Legendary creatures roam the grounds around the building. Absent = on. */
+  legends?: boolean;
+  /**
+   * (Optional, additive) Which creatures roam: the built-in ones, the owner's creature pack (the built-in ones while
+   * the pack folder is empty) or both. Absent = 'pack'.
+   */
+  creatures?: 'builtin' | 'pack' | 'both';
+}
+
+/** (Additive) A legendary creature someone clicked: everything the encounter card shows. */
+export interface LegendEncounter {
+  species: string;
+  name: string;
+  types: { label: string; color: string }[];
+  level: number;
+  variant: 'normal' | 'shiny' | 'shadow' | 'metallic';
+  variantLabel: string;
+  blurb: string;
+  /** Signature colour (card glow, accents). */
+  glow: string;
+  /** Idle frame of the sprite (unscaled pixel art: scale it with image-rendering: pixelated). */
+  sprite: HTMLCanvasElement;
+  /** Every species in the roster (for the collection row), in a fixed order. */
+  roster: { species: string; name: string; sprite: HTMLCanvasElement }[];
 }
 
 /** Tema que o renderer desenha: o escritório original ('none') ou um dos sazonais. */
@@ -93,6 +117,8 @@ export interface WorldApi {
   setPlayback?(p: WorldPlayback | null): void;
   /** (Opcional, aditivo) Sons do ambiente: teclado de quem trabalha à vista, elevador, rodas. */
   onSound?(cb: (cue: SoundCue) => void): () => void;
+  /** (Optional, additive) A legendary creature was clicked on the grounds. */
+  onLegend?(cb: (e: LegendEncounter) => void): () => void;
   destroy(): void;
 }
 
@@ -150,4 +176,6 @@ export const DEFAULT_WORLD_OPTIONS: WorldOptions = {
   followSelected: false,
   dayNight: true,
   theme: 'auto',
+  legends: true,
+  creatures: 'pack',
 };

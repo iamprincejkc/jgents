@@ -23,6 +23,10 @@ export interface UiPrefs {
   feedOpen: boolean;
   /** Contas ocultas na barra lateral (AccountInfo.id). */
   hiddenAccounts: string[];
+  /** Legendary creatures roam the grounds around the office. */
+  legends: boolean;
+  /** Which creatures roam: built-in, the owner's creature pack (built-in while it is empty) or both. */
+  creatures: NonNullable<WorldOptions['creatures']>;
 }
 
 export const DEFAULT_PREFS: UiPrefs = {
@@ -37,6 +41,8 @@ export const DEFAULT_PREFS: UiPrefs = {
   sidebarOpen: true,
   feedOpen: true,
   hiddenAccounts: [],
+  legends: true,
+  creatures: 'pack',
 };
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
@@ -62,6 +68,8 @@ export function sanitizePrefs(raw: unknown): UiPrefs {
     sidebarOpen: bool(o.sidebarOpen, d.sidebarOpen),
     feedOpen: bool(o.feedOpen, d.feedOpen),
     hiddenAccounts: Array.isArray(o.hiddenAccounts) ? o.hiddenAccounts.filter((x): x is string => typeof x === 'string').slice(0, 20) : [],
+    legends: bool(o.legends, d.legends),
+    creatures: oneOf(o.creatures, ['builtin', 'pack', 'both'] as const, d.creatures),
   };
 }
 
@@ -86,7 +94,7 @@ export function savePrefs(storage: StorageLike | null, prefs: UiPrefs): void {
 
 /** Parte das preferências que o mundo (canvas) consome. */
 export function worldOptionsFrom(p: UiPrefs): Partial<WorldOptions> {
-  return { showNames: p.showNames, bubbles: p.bubbles, liveliness: p.liveliness, dayNight: p.daylight !== 'day', daylight: p.daylight, theme: p.theme };
+  return { showNames: p.showNames, bubbles: p.bubbles, liveliness: p.liveliness, dayNight: p.daylight !== 'day', daylight: p.daylight, theme: p.theme, legends: p.legends, creatures: p.creatures };
 }
 
 /** localStorage com proteção contra navegadores que lançam exceção ao acessá-lo. */

@@ -3,6 +3,7 @@
 import { FURNITURE, type FurnitureKind } from '../api';
 import { trim, type BufFurniture } from '../core/sprite';
 import * as C from './common';
+import * as F from './fun';
 import * as O from './office';
 import * as W from './wall';
 
@@ -18,6 +19,7 @@ export const SEED_VARIATIONS: Partial<Record<FurnitureKind, number>> = {
   coffee_table: 2,
   plant_small: 3,
   plant_tall: 3,
+  bar_counter: 4,
 };
 
 /** Normaliza variante/estado para valores válidos do catálogo. */
@@ -125,6 +127,38 @@ function build(kind: FurnitureKind, variant: string | undefined, state: number, 
       return C.receptionDesk(seed);
     case 'bench':
       return C.bench();
+    case 'pool_table':
+      return F.poolTable();
+    case 'cue_rack':
+      return F.cueRack();
+    case 'dartboard':
+      return F.dartboard();
+    case 'neon_sign':
+      return F.neonSign(variant);
+    case 'jukebox':
+      return F.jukebox();
+    case 'espresso_machine':
+      return F.espressoMachine(state);
+    case 'pastry_case':
+      return F.pastryCase();
+    case 'bar_counter':
+      return F.barCounter(variant, seed);
+    case 'bar_stool':
+      return F.barStool();
+    case 'menu_board':
+      return F.menuBoard();
+    case 'bean_sacks':
+      return F.beanSacks();
+    case 'pickleball_net':
+      return F.pickleballNet();
+    case 'scoreboard':
+      return F.scoreboard();
+    case 'ball_cart':
+      return F.ballCart();
+    case 'speaker':
+      return F.speaker();
+    case 'karaoke_screen':
+      return F.karaokeScreen();
   }
 }
 

@@ -208,20 +208,43 @@ describe('vida social', () => {
     if (!ana.step && !ana.queue.length) expect(sim.social.canJoin(ana, clock.now)).toBe(true);
   });
 
-  it('aba volta do segundo plano: rodas encerradas e lugares devolvidos', () => {
+  it('back from the background: a group of idle ones carries on, and its seats are returned when it ends', () => {
     const sim = newSim();
     const clock = { now: T0 };
     sim.applySnapshot(snap(ROOMS, [agent('ana', '/a', 'idle'), agent('caio', '/b', 'idle'), agent('davi', '/b', 'idle')]), clock.now);
     run(sim, clock, 0.3);
     sim.social.force('kitchen', clock.now, ['ana', 'caio', 'davi']);
     run(sim, clock, 3);
+    const g = sim.chars.get('ana')!.gathering!;
+    expect(g).toBeTruthy();
+    const where = [...sim.chars.values()].map((c) => [c.id, c.x, c.y]);
+    clock.now += 60_000;
     sim.fastForward(clock.now);
+    // nobody was sent back to their seat: the chat goes on where it was
+    expect(sim.social.gatherings.has(g)).toBe(true);
+    for (const c of sim.chars.values()) expect(c.gathering).toBe(g);
+    expect([...sim.chars.values()].map((c) => [c.id, c.x, c.y])).toEqual(where);
+    // it ends on its own, and every seat it held is given back
+    run(sim, clock, 240, () => sim.social.gatherings.size === 0 && [...sim.chars.values()].every((c) => c.atSpot === c.homeSpot && !c.step));
     expect(sim.social.gatherings.size).toBe(0);
-    for (const c of sim.chars.values()) {
-      expect(c.gathering).toBeNull();
-      expect(c.atSpot).toBe(c.homeSpot);
-    }
+    for (const c of sim.chars.values()) expect(c.gathering).toBeNull();
     for (const s of sim.spots.all()) expect(sim.spots.ownerOf(s.id)?.startsWith('g:') ?? false).toBe(false);
+  });
+
+  it('back from the background: a group with someone who got a request meanwhile ends, and that one is at the desk', () => {
+    const sim = newSim();
+    const clock = { now: T0 };
+    sim.applySnapshot(snap(ROOMS, [agent('ana', '/a', 'idle'), agent('caio', '/b', 'idle'), agent('davi', '/b', 'idle')]), clock.now);
+    run(sim, clock, 0.3);
+    sim.social.force('kitchen', clock.now, ['ana', 'caio', 'davi']);
+    run(sim, clock, 3);
+    sim.applySnapshot(snap(ROOMS, [agent('ana', '/a', 'working'), agent('caio', '/b', 'idle'), agent('davi', '/b', 'idle')], 2), clock.now);
+    clock.now += 60_000;
+    sim.fastForward(clock.now);
+    const ana = sim.chars.get('ana')!;
+    expect(ana.gathering).toBeNull();
+    expect(ana.atSpot).toBe(ana.homeSpot);
+    expect(sim.spots.get(ana.homeSpot)?.kind).toBe('desk');
   });
 
   it('a interface recebe personalidade, carteira, vínculos e o que está fazendo', () => {

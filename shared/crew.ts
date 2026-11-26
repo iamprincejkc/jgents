@@ -2,6 +2,7 @@
 // instructions and memory); the user writes in one place and the router hands each request to the right agent.
 // Agents put their questions and approval requests on the user's Q&A board. Protocol shared by server/crew and
 // client/src/crew (HTTP JSON + SSE on /api/crew/stream).
+import type { AgentInfo } from './types';
 
 /**
  * How an agent's tool calls are approved:
@@ -13,9 +14,12 @@
 export type CrewPermissionMode = 'ask' | 'acceptEdits' | 'auto' | 'bypassPermissions';
 export const CREW_PERMISSION_MODES: readonly CrewPermissionMode[] = ['ask', 'acceptEdits', 'auto', 'bypassPermissions'];
 
-/** What kind of work the agent does (decides the default icon, instructions and toolbox check). */
-export type CrewKind = 'project' | 'video' | 'security' | 'general' | 'custom';
-export const CREW_KINDS: readonly CrewKind[] = ['project', 'video', 'security', 'general', 'custom'];
+/**
+ * What kind of work the agent does (decides the default icon, instructions and toolbox check). `ceo` and `department`
+ * (additive) make up the company: the user talks to the CEO, which briefs departments and gets their reports back.
+ */
+export type CrewKind = 'project' | 'video' | 'security' | 'general' | 'custom' | 'ceo' | 'department';
+export const CREW_KINDS: readonly CrewKind[] = ['project', 'video', 'security', 'general', 'custom', 'ceo', 'department'];
 
 export interface CrewAgent {
   /** Short handle used in @mentions and URLs: lowercase letters, digits and dashes. */
@@ -143,6 +147,53 @@ export interface CrewToolCheck {
   found: boolean;
   path?: string;
   hint: string;
+}
+
+/** What happened in the company (server/crew/company.ts, CompanyLog): one line of <company>/log.jsonl. */
+export type CompanyEventType = 'request' | 'brief' | 'report' | 'answer';
+
+export interface CompanyEvent {
+  at: number;
+  type: CompanyEventType;
+  /** Who acted: the CEO (request, answer), the department (report) or the one who briefed (brief). */
+  agent: string;
+  /** brief: who got it. */
+  to?: string;
+  /** The ticket (one CEO request with its briefs) it belongs to. */
+  ticket?: string;
+  status?: 'done' | 'error' | 'stopped';
+  /** A short summary (the full text is in the chat). */
+  text: string;
+  costUsd?: number;
+}
+
+/** A finished piece of work in <company>/outbox. */
+export interface CompanyFile {
+  name: string;
+  /** Last change (epoch ms). */
+  at: number;
+  bytes: number;
+}
+
+/** GET /api/crew/company: the company for the HQ console. */
+export interface CrewCompany {
+  folder: string;
+  ceo?: CrewAgent;
+  departments: CrewAgent[];
+  states: CrewAgentState[];
+  /** The latest events (oldest first), from before a restart too. */
+  log: CompanyEvent[];
+  /** Newest first. */
+  outbox: CompanyFile[];
+  /** The members as the office draws them (face, uniform, status, activity): CrewService.companyMembers. */
+  members: AgentInfo[];
+}
+
+/** GET /api/crew/company/outbox/:name */
+export interface CompanyFileText extends CompanyFile {
+  text: string;
+  /** Only the first 512 KB came back. */
+  truncated: boolean;
 }
 
 export interface CrewSnapshot {

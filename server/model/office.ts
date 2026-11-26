@@ -77,6 +77,13 @@ export interface OfficeDeps {
   updates?: () => UpdateStatus;
   /** Terminais interativos (PtyManager): estado do recurso e os abertos. */
   ptys?: () => { status: PtyStatus; list: PtyInfo[] };
+  /** The company's characters (CrewService.companyMembers), put in OfficeSnapshot.company. Absent = no company. */
+  company?: () => AgentInfo[];
+  /**
+   * Folders whose sessions the office skips (CrewService.isCompanyPath): the company members' own turns, drawn as the
+   * company instead of as a project room with a session.
+   */
+  hidden?: (cwd: string) => boolean;
   now?: () => number;
 }
 
@@ -319,6 +326,9 @@ export class Office {
       this.setStatus(p.id, p.status, p.waitingFor);
       return;
     }
+    // A company member's turn (deps.hidden): already in the office as the company. Its subagents, activities and
+    // status changes find no agent and are dropped like those of any unknown id.
+    if (this.deps.hidden?.(p.cwd)) return;
     const roomId = normalizeCwd(p.cwd);
     this.ensureRoom(roomId, now);
     const chosen = this.roomCharacter(roomId, p.id, p.sessionId);
@@ -983,11 +993,13 @@ export class Office {
     const sessions = new Map<string, number>();
     for (const a of real) if (a.kind === 'main' && a.status !== 'offline') sessions.set(a.account, (sessions.get(a.account) ?? 0) + 1);
     const ptys = this.deps.ptys?.();
+    const company = this.deps.company?.() ?? [];
     return {
       rev: this.rev,
       serverTime: now,
       rooms,
       agents: [...real, ...demoAgents].map(trim),
+      ...(company.length ? { company: company.map(trim) } : {}),
       accounts: [...this.deps.accounts(sessions), ...(this.demoSnap?.accounts ?? [])],
       ...(ptys ? { ptys: ptys.list } : {}),
       meta: {

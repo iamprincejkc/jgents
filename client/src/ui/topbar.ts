@@ -49,6 +49,8 @@ export class TopBar implements UiComponent {
   /** Crew chat (crew.html): one chat for every agent; the badge counts the questions waiting on its board. */
   private readonly crewBtn: HTMLButtonElement;
   private readonly crewBadge: HTMLElement;
+  /** The company's HQ console (hq.html): shown once the company is set up. */
+  private readonly hqBtn: HTMLButtonElement;
   private readonly spawnPanel: SpawnPanel;
   /** Grupo dos botões de painéis (feed, configurações, ajuda); o histórico entra aqui (ui/index.ts). */
   readonly panelGroup: HTMLElement;
@@ -115,6 +117,8 @@ export class TopBar implements UiComponent {
     this.crewBadge = h('span', { class: 'ui-btn-crew__badge', hidden: true });
     this.crewBtn.append(this.crewBadge);
     this.crewBtn.hidden = true;
+    this.hqBtn = iconButton(ICONS.hq, 'HQ: talk to the CEO (typing or voice) and see every department', () => location.assign('/hq.html'), 'ui-btn-hq');
+    this.hqBtn.hidden = true;
     this.pollCrew();
     this.version = new VersionChip(ctx, this.settingsBtn);
     const viewGroup = h(
@@ -127,6 +131,7 @@ export class TopBar implements UiComponent {
     const panelGroup = h(
       'div',
       { class: 'ui-btn-group', role: 'group', attrs: { 'aria-label': tr('Painéis') } },
+      this.hqBtn,
       this.crewBtn,
       this.spawnBtn,
       this.timelapseBtn,
@@ -156,13 +161,17 @@ export class TopBar implements UiComponent {
     );
   }
 
-  /** Shows the Crew button when the crew is on (local access only) and how many questions wait on its board. */
+  /**
+   * Shows the Crew button when the crew is on (local access only) and how many questions wait on its board, and the HQ
+   * button once the company is set up.
+   */
   private pollCrew(): void {
     const tick = async () => {
       try {
         const res = await fetch('/api/crew/summary');
-        const s = res.ok ? ((await res.json()) as { enabled?: boolean; open?: number; working?: number }) : undefined;
+        const s = res.ok ? ((await res.json()) as { enabled?: boolean; open?: number; working?: number; company?: boolean }) : undefined;
         this.crewBtn.hidden = !s?.enabled;
+        this.hqBtn.hidden = !s?.enabled || !s.company;
         const open = s?.open ?? 0;
         this.crewBadge.hidden = !open;
         this.crewBadge.textContent = String(open);
@@ -171,6 +180,7 @@ export class TopBar implements UiComponent {
         this.crewBtn.setAttribute('aria-label', label);
       } catch {
         this.crewBtn.hidden = true;
+        this.hqBtn.hidden = true;
       }
     };
     void tick();

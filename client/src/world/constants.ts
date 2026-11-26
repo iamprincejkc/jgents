@@ -9,13 +9,43 @@ export const COL_W = 16;
 export const ROOM_H = 12;
 /** Altura do corredor que corta o prédio de leste a oeste. */
 export const CORRIDOR_H = 5;
-/** Colunas do núcleo (recepção/banheiros e copa/lounge). */
-export const CORE_COLS = 2;
+/**
+ * Room columns of the house (it never grows sideways). The core block at the top is a ring: a row of
+ * rooms, the north hall, the central office with two rooms on each side, the south hall. Project
+ * rooms fill the floors below the ring, 8 per floor.
+ */
+export const CORE_COLS = 4;
 
+/** Rows of the core block (tiles from the top). */
 export const NORTH_Y = 0;
+/** The north hall, under the top row of rooms. */
 export const CORRIDOR_Y = ROOM_H;
+/** Upper row beside the central office (restrooms, billiards). */
 export const SOUTH_Y = ROOM_H + CORRIDOR_H;
-export const BUILDING_H = ROOM_H * 2 + CORRIDOR_H;
+/** Lower row beside the central office (lounge, karaoke). */
+export const LOWER_Y = SOUTH_Y + ROOM_H;
+/** The south hall, under the central office. */
+export const SOUTH_HALL_Y = LOWER_Y + ROOM_H;
+/** Height of the core block. */
+export const CORE_H = SOUTH_HALL_Y + CORRIDOR_H;
+/** One floor of project rooms: a row opening onto the hall above, a row opening onto the hall below, that hall. */
+export const FLOOR_H = ROOM_H * 2 + CORRIDOR_H;
+/** Project rooms per floor (the upper row west to east, then the lower row). */
+export const ROOMS_PER_FLOOR = CORE_COLS * 2;
+/** Width of the halls that run north-south (beside the central office, and the stair halls). */
+export const HALL_W = 5;
+/** Room columns west of the middle stair hall (the rest are east of it). */
+export const SPINE_COL = CORE_COLS / 2;
+/** Width of the whole house (room columns + the middle stair hall). */
+export const HOUSE_W = CORE_COLS * COL_W + HALL_W;
+/** The central office: between the side halls, from the north hall to the south hall. */
+export const HUB_X = COL_W + HALL_W;
+export const HUB_W = HOUSE_W - 2 * (COL_W + HALL_W);
+
+/** Height of the house with `floors` floors of project rooms. */
+export function houseH(floors: number): number {
+  return CORE_H + floors * FLOOR_H;
+}
 
 /** Primeira coluna (local) da porta de 2 tiles das salas. */
 export const DOOR_X = 7;

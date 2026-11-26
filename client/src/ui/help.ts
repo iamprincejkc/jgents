@@ -280,7 +280,7 @@ export class HelpDialog {
 /** Um chip de conta de exemplo (legenda). */
 function accountSample(short: string, color: string, codex = false): HTMLElement {
   const chip = createAccountChip('sm');
-  updateAccountChip(chip, { id: short, short, name: codex ? 'Codex' : tr('Conta {0}', [short]), color, configDir: '', sessions: 0, usageStatus: 'disabled', ...(codex ? { provider: 'codex' as const } : {}) });
+  updateAccountChip(chip, { id: short, short, name: codex ? 'Codex' : `Claude ${short}`, color, configDir: '', sessions: 0, usageStatus: 'disabled', ...(codex ? { provider: 'codex' as const } : {}) });
   chip.setAttribute('aria-hidden', 'true');
   return chip;
 }

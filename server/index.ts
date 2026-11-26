@@ -38,6 +38,7 @@ import { discoverCodexDirs } from './sources/codex/accounts';
 import { CodexHistory } from './sources/codex/history';
 import { CodexSource } from './sources/codex/source';
 import { createBuildReader } from './build';
+import { ensureCreaturePack } from './creatures/pack';
 import { UpdateChecker } from './updates/checker';
 import { tr } from '../shared/i18n';
 import { createCliRunner, createOpener, SpawnService } from './spawn/spawn';
@@ -72,7 +73,7 @@ const roomAliases = new RoomAliases(join(config.dataDir, 'rooms.json'));
 roomAliases.load();
 
 // Office, contas e fontes de agentes se referenciam (avisos de mudança / fontes): ligação tardia.
-const late: { office?: Office; agents?: SourceSet; permissions?: PermissionRegistry; messages?: MessageRegistry; ptys?: PtyManager; ptyOff?: string } = {};
+const late: { office?: Office; agents?: SourceSet; permissions?: PermissionRegistry; messages?: MessageRegistry; ptys?: PtyManager; ptyOff?: string; crew?: CrewService } = {};
 // Versão nova: consulta a release mais recente no GitHub a cada 6 h (JGENTS_UPDATE_CHECK=0 desliga).
 const updates = new UpdateChecker({
   current: config.version,
@@ -104,6 +105,8 @@ const office = new Office({
   messages: config.messages ? () => late.messages?.reachable() ?? new Set() : undefined,
   ptys: () => (late.ptys ? { status: late.ptys.status(), list: late.ptys.list() } : { status: { enabled: false, reason: late.ptyOff ?? tr('desligado') }, list: [] }),
   updates: () => updates.status(),
+  company: () => late.crew?.companyMembers() ?? [],
+  hidden: (cwd) => late.crew?.isCompanyPath(cwd) ?? false,
 });
 // Fontes de agentes, uma por ferramenta (sources/source.ts): a do Claude Code e, depois dela, a do Codex (quando há
 // pastas do Codex; JGENTS_CODEX=0 desliga), com o histórico dela no HistorySet abaixo e as contas registradas por
@@ -202,7 +205,7 @@ const spawn = spawnOn
 // Ditado: no Docker quem transcreve é o auxiliar do host; no Node, o servidor, se achar o Whisper local.
 const whisper = config.messages && !config.inDocker ? findWhisper() : undefined;
 const dictation = config.messages
-  ? new DictationService(whisper && !('missing' in whisper) ? { transcriber: createWhisperTranscriber(whisper) } : {})
+  ? new DictationService(whisper && !('missing' in whisper) ? { transcriber: createWhisperTranscriber(whisper) } : whisper ? { missing: whisper.missing } : {})
   : undefined;
 const messages = config.messages
   ? new MessageRegistry({
@@ -255,6 +258,40 @@ const ptys = spawnPty
 late.ptys = ptys;
 late.ptyOff = ptyOff;
 
+// Crew (server/crew): one chat for a team of long-lived Claude Code agents. It runs Claude Code on this computer, so
+// it needs the same local-only lock as the messages and the Node mode (not Docker); JGENTS_CREW=0 turns it off.
+// Built before the sources start: the office asks it which sessions are the company's own turns (late.crew) from
+// the first boot on.
+const crewFlag = process.env.JGENTS_CREW?.trim();
+const crewOffReason = config.inDocker
+  ? 'it runs Claude Code on this computer, so it needs JGENTS running directly (npm start or win:install), not in Docker'
+  : !config.messages
+    ? `same lock as the messages (${messagesOffReason(process.env, config.host, config.inDocker) ?? 'off'})`
+    : crewFlag && !isTruthy(crewFlag)
+      ? 'turned off by JGENTS_CREW'
+      : '';
+const crewBin = crewOffReason ? undefined : runnableClaudeBin(process.env);
+const crew = crewOffReason
+  ? undefined
+  : new CrewService({
+      dataDir: config.dataDir,
+      port: config.port,
+      claudeBin: crewBin,
+      claudeDirs: config.claudeDirs,
+      disabledReason: 'the "claude" executable was not found on the PATH (set JGENTS_CLAUDE_BIN)',
+      bridgeScript: join(config.rootDir, 'mod', 'jgents-crew', 'mcp.mjs'),
+      nodeBin: process.execPath,
+      env: process.env,
+      routerModel: process.env.JGENTS_CREW_ROUTER_MODEL?.trim() || 'haiku',
+      maxParallel: Number(process.env.JGENTS_CREW_MAX_PARALLEL) || 4,
+    });
+late.crew = crew;
+// The company characters follow the crew: a status, activity, roster or board change redraws the office (the streamed
+// text and the chat messages change nothing there).
+crew?.subscribe((event) => {
+  if (event !== 'delta' && event !== 'message') office.markDirty();
+});
+
 if (config.demo) office.setDemo(true);
 // As fontes síncronas (a do Claude Code) terminam o boot aqui, antes de o hub começar a transmitir.
 void agents.start();
@@ -285,31 +322,6 @@ async function spawnFolders() {
   return recentFolders(history ? await history.list().catch(() => []) : [], rooms);
 }
 
-// Crew (server/crew): one chat for a team of long-lived Claude Code agents. It runs Claude Code on this computer, so
-// it needs the same local-only lock as the messages and the Node mode (not Docker); JGENTS_CREW=0 turns it off.
-const crewFlag = process.env.JGENTS_CREW?.trim();
-const crewOffReason = config.inDocker
-  ? 'it runs Claude Code on this computer, so it needs JGENTS running directly (npm start or win:install), not in Docker'
-  : !config.messages
-    ? `same lock as the messages (${messagesOffReason(process.env, config.host, config.inDocker) ?? 'off'})`
-    : crewFlag && !isTruthy(crewFlag)
-      ? 'turned off by JGENTS_CREW'
-      : '';
-const crewBin = crewOffReason ? undefined : runnableClaudeBin(process.env);
-const crew = crewOffReason
-  ? undefined
-  : new CrewService({
-      dataDir: config.dataDir,
-      port: config.port,
-      claudeBin: crewBin,
-      claudeDirs: config.claudeDirs,
-      disabledReason: 'the "claude" executable was not found on the PATH (set JGENTS_CLAUDE_BIN)',
-      bridgeScript: join(config.rootDir, 'mod', 'jgents-crew', 'mcp.mjs'),
-      nodeBin: process.execPath,
-      env: process.env,
-      routerModel: process.env.JGENTS_CREW_ROUTER_MODEL?.trim() || 'haiku',
-      maxParallel: Number(process.env.JGENTS_CREW_MAX_PARALLEL) || 4,
-    });
 const crewApi = createCrewHandler({ crew, offReason: crewOffReason || (crew?.reason ?? ''), isRemote: isRemoteRequest, folders: spawnFolders });
 
 const api = createApiHandler({
@@ -343,6 +355,7 @@ const api = createApiHandler({
   stats,
   updates,
   remote: config.remote ? { is: isRemoteRequest, allows: (f) => config.remote!.allow.has(f) } : undefined,
+  creaturesDir: ensureCreaturePack(config.creaturesDir),
 });
 
 const server = http.createServer();

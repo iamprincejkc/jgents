@@ -361,6 +361,8 @@ export function detectAccounts(dirs: string[], opts: { home?: string; env?: Node
   });
 
   // Contas sem atalho detectado recebem A, B, C... (sem colidir com os atalhos já usados).
+  // A single Claude account with no alias is simply "Claude", badge C.
+  if (partial.length === 1 && !partial[0].short) partial[0].short = 'C';
   const used = new Set(partial.map((p) => p.short).filter((s): s is string => !!s));
   let next = 0;
   const fallbackShort = () => {
@@ -380,7 +382,8 @@ export function detectAccounts(dirs: string[], opts: { home?: string; env?: Node
       id: p.id,
       configDir: str(p.ov?.configDir) ?? p.dir,
       short,
-      name: str(p.ov?.name) ?? tr('Conta {0}', [short]),
+      // the product name, not "Account A": "Claude" alone, "Claude A" / "Claude B" when there are several
+      name: str(p.ov?.name) ?? (partial.length === 1 ? 'Claude' : `Claude ${short}`),
       color: str(p.ov?.color) ?? ACCOUNT_COLORS[i % ACCOUNT_COLORS.length],
     };
     const email = str(p.ov?.email) ?? p.cfg.email;

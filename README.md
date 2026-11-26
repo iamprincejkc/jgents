@@ -284,11 +284,14 @@ Install a certificate › CA certificate), checking the fingerprint the setup sh
   there. **It comes turned off:** it needs `JGENTS_PTY=1` (the same opt-in as the
   [interactive terminal](#interactive-terminal-take-over-new-session-and-end); in Docker, put it in `.env` and keep
   `npm run codex:bridge` running on the computer) and, from the phone, `spawn` in `JGENTS_REMOTE_ALLOW` too.
-- **Dictation** (in New agent and in the message box): needs `whisper-cli` and `ffmpeg` (`brew install whisper-cpp
-  ffmpeg`) and a multilingual model in `~/.local/share/whisper/` (`ggml-small.bin` gets more right than
-  `ggml-base.bin`; the `.en` ones only understand English). Without them, the Dictate button doesn't show up. The
+- **Dictation** (in New agent, in the message box and the HQ console's voice): needs `whisper-cli` and `ffmpeg`
+  (`brew install whisper-cpp ffmpeg`; on Windows `scoop install whisper-cpp` and `winget install Gyan.FFmpeg`) and a
+  multilingual model in `~/.local/share/whisper/` (`ggml-small.bin` gets more right than `ggml-base.bin`; the `.en`
+  ones only understand English), then a restart of JGENTS. Without them, the Dictate button doesn't show up. The
   voice never leaves the computer. `JGENTS_WHISPER_BIN`, `JGENTS_FFMPEG_BIN`, `JGENTS_WHISPER_MODEL` and
   `JGENTS_DICTATION_LANGS` (default `pt,en`) adjust it.
+  With one language (e.g. `JGENTS_DICTATION_LANGS=en`) a sentence is about twice as fast: there is no language
+  detection pass. Short clips are encoded in a window their size, so a spoken sentence takes a few seconds on a CPU.
 - **Away from home (Tailscale):** with Tailscale on the computer and on the phone, `tailscale serve --bg --https=443
   https+insecure://127.0.0.1:443` publishes the remote port (with login) only to your devices, with a valid
   certificate at `https://<computador>.<tailnet>.ts.net`; add that name to `JGENTS_ALLOWED_HOSTS`. Always point it at
@@ -604,6 +607,40 @@ working folder, instructions and memory, and you talk to all of them from one pl
   conversation yourself. The roster, chat and board live in `~/.jgents/crew/`.
 - **Requirements.** Claude Code logged in for your user (run `claude` once and `/login`), JGENTS in Node mode
   (`npm start` / `win:install`, not Docker) and local access, like the terminal. `JGENTS_CREW=0` turns it off.
+
+### The company and its HQ
+
+**Set up company** (in the Crew sidebar) adds a whole company on top of your crew in one click: a **CEO** and 16
+departments (Executive Assistant, Finance, HR, Legal, Marketing, PR, Sales, Support, Operations, Procurement, Product,
+Engineering & IT, Design, Data, Research, Knowledge & Training).
+Each one is its own Crew agent with its own workspace, and they stay idle until you need them.
+
+- **You talk to the CEO only.**
+  Every request without an `@mention` goes to the CEO, which answers simple things itself (status, reports, what is in
+  the outbox) and briefs the right departments for the rest (`delegate`).
+  When the last department reports, the CEO gets all the reports in one message, checks and combines the work, saves
+  it in the outbox and answers you once.
+- **The company folder** (`~/.jgents/company/`): `profile.md` (who the company is: fill it in, everyone reads it),
+  `outbox/` (finished work for you) and `log.jsonl` (every request, brief, report and answer; the CEO reads it for
+  reports).
+  The company drafts and you act: nobody sends, posts, pays or signs anything.
+- **In the office** the company lives in the Main Office, in a navy blazer over a shirt in the department's colour.
+  Whoever has a brief takes one of the six hot desks (more than six work on laptops at the meeting table), the CEO
+  sits at the head of the meeting table, and the idle ones are spread over the house's lounges (coffee bar, library,
+  billiards, karaoke and the rest, each one with its usual spot), from where they play and wander like anyone idle.
+  Their own Claude Code sessions do not open project rooms.
+- **The HQ console** at **http://localhost:4747/hq** (or **Open HQ** in the Crew sidebar) is made for a big screen:
+  the company's pulse, the departments on a ring around the CEO, the open request and who has reported, the questions
+  for you, the latest deliverables, and the talk bar.
+  Tabs: **Departments** (each one's status, cost and turns, with Stop), **Reports** (your requests and the CEO's full
+  answers), **Deliverables** (the outbox, readable in place) and **Settings**.
+- **Voice.** Hold **Space** (or press and hold the mic button) to talk; **M** or a click on the mic turns
+  **always listening** on and off; **Esc** stops listening and stops the voice; **F** is full screen.
+  Your voice is turned into text on this computer by the local Whisper (the same as dictation: `whisper-cli`, `ffmpeg`
+  and a multilingual model; Settings says what is missing) and never leaves it.
+  The CEO's replies are read aloud by the browser (Settings: voice, speed, on or off), and the microphone pauses
+  meanwhile so it never hears the CEO as you.
+  Always listening learns the room's noise, so a fan or a hum does not count as talking.
 
 ### Editing the character
 
@@ -1172,6 +1209,10 @@ a new request to someone — it lets the group know ("Oops, they're calling me! 
 | 💬 | **Chat** | Two coworkers standing in a corner of the lobby, the kitchen or the lounge. |
 | ✊ | **Rock-paper-scissors for coins** | "Jo… Ken… Po!", the hand signs appear over their heads, the winner celebrates and the coins fly from one to the other; the loser gets upset and, if competitive, asks for a rematch. A tie goes again. Anyone walking by may stop to watch. |
 | 💄 | **Bathroom mirror** | Lipstick or a comb, with the face reflected in the mirror and a sparkle at the end. Works alone or in pairs ("Can I borrow your comb?"). |
+| 🎱 | **Billiards** | In the Billiards Club the two players take turns at the pool table: the rack breaks, the balls roll and drop into the pockets, and whoever sinks a ball keeps the table. The first to sink four (the last one is the 8 ball) wins. Fans watch from behind the table. |
+| 🎾 | **Pickleball** | A rally over the net on the court, with a bounce on each side, first to 7. The score shows on the court's scoreboard and the crowd sits on the benches. |
+| 🎤 | **Karaoke** | One singer (sometimes a duet) on the stage with a mic, the lyrics on the big screen, sweeping spotlights and a spinning mirror ball, the crowd dancing or on the couch. When the song ends the machine gives a score. |
+| ☕ | **Coffee Bar** | An espresso from the bar, then a chat at the cosy tables (the same topics as the kitchen). |
 
 <table>
   <tr>
@@ -1191,6 +1232,61 @@ a new request to someone — it lets the group know ("Oops, they're calling me! 
     <td><b>In the agent's details.</b> What it's doing, the wallet, the score, the personality, friendships and rivalries (with the head-to-head record) and the statement.</td>
   </tr>
 </table>
+
+### The house and the entertainment wing
+
+The office is one square house, four rooms wide, that grows downward a floor at a time.
+At its heart is the **Main Office**: an open-plan desk island, a meeting table, a sofa corner and a bistro corner, with a doorway on each of its four sides.
+A ring of halls runs around it, and every room of the top of the house opens onto that ring: the reception, kitchen, coffee bar and pickleball court above it, the restrooms and lounge to the west, the billiards club and karaoke to the east.
+Below the ring come the floors of project rooms, up to eight per floor, with a hallway through the middle of each floor and a stair hall down the centre of the house joining every hallway.
+A spot with no project is never empty: it is furnished as one of eight amenity rooms (Games Room, Library, Snack Bar, Indoor Garden, Meeting Room, Music Studio, Ping-pong Room, Nap Room), each used by the agents, and it gives way when a project needs the spot.
+A floor never repeats an amenity room.
+
+The entertainment wing has four rooms:
+
+| Room | What's in it |
+| --- | --- |
+| **Coffee Bar** | Exposed brick, a neon sign, a chalkboard menu, two espresso machines that steam while they pull a shot, pastry cases, a bar with stools and cosy armchairs. A coffee break taken alone also goes to the closest espresso machine. |
+| **Billiards Club** | A pool table under a pendant light, a cue rack, a dartboard (agents with nothing to do throw a few rounds of darts on their own) and a glowing jukebox. |
+| **Pickleball Court** | A full court with its kitchen lines and net, benches for the crowd, a ball cart and a live scoreboard. |
+| **Karaoke** | A stage with speakers, a big lyrics screen, a light-up dance floor, a mirror ball and a couch for the audience. |
+
+Personality decides who goes where: sports fans love pickleball, competitive types and betting lovers love the pool table, show-offs and jokers grab the mic (the shy ones rarely do), and caffeine lovers live at the Coffee Bar.
+
+### Legendary creatures
+
+Rare legendary creatures roam the grounds around the office: a few at a time in the meadow along the north wall and on the lawns beside the building, while the flyers cross the sky over the roof. After a few minutes each one leaves and another may turn up. Now and then one shows up in a rare colour (✨ Shiny, 🌑 Shadow or ⚙️ Metallic).
+
+The six are original designs: **Voltfang** (electric wolf), **Pyrewing** (fire phoenix), **Frostantler** (crystal stag), **Tidalray** (sky manta), **Umbralynx** (shadow lynx, which blinks from place to place instead of walking) and **Verdrake** (leaf dragon).
+
+Hover one to see its name and level; click it for its encounter card, with its types, colour, a line of lore and the collection of the ones you have met (kept in your browser). Turn them off in **Settings › Office › Legendary creatures**.
+
+#### Your own creatures
+
+Any image you drop in the creature pack folder roams the grounds too.
+The folder is `~/.jgents/creatures` (or `JGENTS_CREATURES_DIR`), and JGENTS creates it with a `README.txt` on start.
+Each PNG, WebP or GIF (up to 2 MB, up to 64 of them) becomes a creature named after its file: `fire_cat.png` shows up as "Fire Cat".
+JGENTS crops the image to what is visible, scales it to the creature's size with crisp pixel edges, makes it hop as it walks, and recolours it for the rare Shiny, Shadow and Metallic variants.
+Changes show up within half a minute, without a restart.
+
+Pick what roams in **Settings › Office › Which creatures roam**: **Built-in**, **Your pack** (the default; the built-in ones roam while the folder is empty) or **Both**.
+The same setting shows where the folder is and any problem with its files.
+
+An optional `creatures.json` in the folder tunes each creature, keyed by its file name; every field is optional:
+
+```json
+{
+  "creatures": {
+    "fire_cat.png": { "name": "Fire Cat", "flies": false, "size": 40, "faces": "left", "speed": 24,
+                      "level": [40, 55], "types": ["fire"], "blurb": "One line for its card.",
+                      "glow": "#ff8a3d", "variants": { "shiny": "fire_cat_shiny.png" } },
+    "old_one.png": { "enabled": false }
+  }
+}
+```
+
+`size` is the longest side on the grounds (12 to 96, default 36); `faces` says which way the creature in the image looks; the built-in type words (electric, fire, flying, ice, water, dark, psychic, grass, dragon) get their colour, any other word is shown as written; `variants` points at hand-made images for the rare colours.
+The images are served only from that folder, never from anywhere else on the disk, and the folder is outside the repository, so nothing in it is ever committed.
 
 ### Personalities
 
