@@ -15,7 +15,7 @@
 > It is renamed throughout (the `/jgents` command, `JGENTS_*` settings, the `~/.jgents` data folder) and moves an existing Habblaud install over on first start.
 > It defaults to English everywhere, including the Claude Code add-on in `mod/` and demo mode, and runs cleanly on Windows.
 > On Windows, `npm run build` then `npm run win:install` keeps it running in the background (it starts with Windows and restarts itself) and adds a JGENTS shortcut you can pin to the taskbar.
-> The rest of this README is Habblaud's documentation with the name changed.
+> Since then it has grown features of its own (listed below); the rest of this README builds on Habblaud's documentation.
 
 <p align="center">
   <img alt="Node.js 22.12+" src="https://img.shields.io/badge/node-%E2%89%A522.12-5fa04e?logo=node.js&logoColor=white" />
@@ -44,6 +44,15 @@ Everything runs on your machine, reading the files Claude Code itself already wr
 your shell, to give each account its letter). Nothing leaves the computer: JGENTS doesn't read credentials or make
 external calls.
 
+**What JGENTS adds on top of watching:**
+
+- **[Crew](#crew-one-chat-for-a-team-of-agents):** one chat for a team of long-lived Claude Code agents, each in its own folder and session; requests go to the right agent, and their questions land on one board.
+- **[A company and its HQ console](#the-company-and-its-hq):** one click adds a CEO and 16 departments (finance, HR, legal, marketing and the rest).
+  You talk to the CEO only, by typing or by voice, and it briefs the departments and answers you once.
+  The HQ console at `/hq` shows the whole company at a glance.
+- **[A house with a social life](#the-house-and-the-entertainment-wing):** a Main Office in the middle, amenity rooms instead of empty ones, and an entertainment wing (coffee bar, billiards, pickleball, karaoke) where idle agents play together.
+- **[Creatures on the grounds](#legendary-creatures):** original creatures roam around the house, or your own images from a folder.
+
 ## Contents
 
 - [What it looks like](#what-it-looks-like)
@@ -61,11 +70,22 @@ external calls.
 
 ## What it looks like
 
-**Overview.** The building has a lobby with elevators, a kitchen, restrooms and a lounge; each project with an open
-session gets its own room along the hallway. At the top, the counters and each account's usage; on the left, the rooms
-and agents; at the bottom, the activity feed.
+**Overview.** The house has a Main Office in the middle, ringed by halls, with the reception and its elevators, a kitchen, restrooms, a lounge, a coffee bar, a pickleball court, a billiards club and karaoke around it.
+Each project with an open session gets its own room; the spots without a project are amenity rooms (game room, library, snack bar, indoor garden, meeting room, music studio, ping-pong, nap room), so the house never shows an empty room.
+At the top, the counters and each account's usage; on the left, the rooms and agents; at the bottom, the activity feed.
 
-![JGENTS overview: building with lobby, kitchen, restrooms, lounge and project rooms; sidebar with rooms and agents; account usage at the top; activity feed at the bottom](docs/screenshots/overview.png)
+![JGENTS overview: the house with the Main Office in the middle, the entertainment wing, amenity rooms and six project rooms; sidebar with rooms and agents; account usage at the top; activity feed at the bottom](docs/screenshots/overview.png)
+
+**The company at work.** Set up a company and its CEO and departments move into the Main Office, all in a navy blazer over a shirt in their department's colour.
+Whoever has a brief takes a hot desk, the CEO works from the head of the meeting table, and the idle ones are spread over the house, playing and wandering until the next brief.
+
+![The Main Office: HR, Marketing, Finance, Legal and Design at the hot desks, each with a name tag and a live screen, and the CEO at the head of the meeting table](docs/screenshots/company.png)
+
+**The HQ console** (`/hq`) is made for a big screen: the company's pulse, the departments on a ring around the CEO, the open request and who has reported, the questions waiting for you, the latest deliverables, and the talk bar.
+Hold **Space** to talk to the CEO, or press **M** to keep it listening; your voice is turned into text on your own computer and the answers are read aloud.
+See [The company and its HQ](#the-company-and-its-hq).
+
+![The HQ console: company pulse and requests per hour on the left, the CEO in the middle of a ring of departments with their status, the latest request with each department's progress, a question from Finance with one-click answers, the deliverables, and the talk bar with the CEO's last answer](docs/screenshots/hq.png)
 
 <table>
   <tr>
@@ -105,15 +125,13 @@ and agents; at the bottom, the activity feed.
   </tr>
 </table>
 
-**The lights go out.** When you close a project's last session, the last character walks to the light switch,
-turns off the lights and leaves by elevator — and the room is taken apart, becoming a garden until a new project
-arrives. If the garden ended up between two rooms, the farthest room moves there: it's set up in the empty spot,
-everyone walks over to it, and the old address goes dark and is taken apart. That way the building has no gaps and
-shrinks on its own.
+**The lights go out.** When you close a project's last session, the last character walks to the light switch, turns off the lights and leaves by elevator, and the room is taken apart: its spot becomes an amenity room again until a new project needs it.
+If that leaves a gap before the last project room, the farthest room moves into it: it's set up in the new spot, everyone walks over, and the old address goes dark and is taken apart.
+That way the project rooms stay together and the house loses a floor when it no longer needs it.
 
-| 1. The room is set up, still dark | 2. Someone turns on the lights and everyone works | 3. The last one leaves and turns off the lights | 4. The room becomes a garden |
+| 1. The room is set up, still dark | 2. Someone turns on the lights and everyone works | 3. The last one leaves and turns off the lights | 4. The spot is an amenity room again |
 | --- | --- | --- | --- |
-| ![Room being set up, with the furniture appearing and the lights off](docs/screenshots/lifecycle-1.png) | ![Lit room with three agents working at their desks](docs/screenshots/lifecycle-2.png) | ![Room with the lights off and the furniture still in place, after everyone left](docs/screenshots/lifecycle-3.png) | ![The room's lot turned into a garden](docs/screenshots/lifecycle-4.png) |
+| ![Room being set up, with the furniture appearing and the lights off](docs/screenshots/lifecycle-1.png) | ![Lit room with three agents working at their desks](docs/screenshots/lifecycle-2.png) | ![Room with the lights off and the furniture still in place, after everyone left](docs/screenshots/lifecycle-3.png) | ![The same spot furnished as the game room again, with arcade machines and beanbags](docs/screenshots/lifecycle-4.png) |
 
 <table>
   <tr>
